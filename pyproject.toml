@@ -1,0 +1,13 @@
+[project]
+name = "comfyui-image-manager"
+description = "Lineage tracking, visual clustering, and a web UI for managing generated images in ComfyUI."
+version = "1.0.0"
+license = {file = "LICENSE"}
+dependencies = ["pillow", "numpy", "scikit-learn"]
+
+[project.urls]
+Repository = "https://github.com/akierson/ComfyUI_image_manager"
+
+[tool.comfy]
+PublisherId = "akierson"
+DisplayName = "ComfyUI Image Manager"

@@ -1,0 +1,637 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Image Manager</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { background: #1a1a1a; color: #e0e0e0; font-family: system-ui, sans-serif; padding: 24px; }
+    h1 { font-size: 1.4rem; margin-bottom: 24px; color: #fff; }
+    .date-group { margin-bottom: 32px; }
+    .date-label { font-size: 0.85rem; color: #888; margin-bottom: 12px; text-transform: uppercase; letter-spacing: 0.05em; }
+    .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 12px; }
+    .card { background: #2a2a2a; border-radius: 8px; overflow: hidden; cursor: pointer; transition: transform 0.15s; }
+    .card:hover { transform: scale(1.02); }
+    .card img { width: 100%; aspect-ratio: 1; object-fit: cover; display: block; background: #333; }
+    .card-body { padding: 8px 10px; }
+    .card-name { font-size: 0.8rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .empty { color: #666; text-align: center; padding: 60px 0; }
+    #lightbox { display:none;position:fixed;inset:0;background:rgba(0,0,0,0.85);z-index:200;align-items:center;justify-content:center;flex-direction:column; }
+    #lightbox.open { display:flex; }
+    #lightbox img { max-width:90vw;max-height:80vh;object-fit:contain;border-radius:6px; }
+    #lightbox-actions { margin-top:14px;display:flex;gap:10px; }
+    #lightbox-actions button { background:#444;border:none;color:#ddd;padding:6px 16px;border-radius:5px;cursor:pointer;font-size:0.85rem; }
+    #lightbox-actions button:hover { background:#555; }
+
+    #import-drawer-btn {
+      background: #5a3a1a; border: none; color: #e8a060; padding: 6px 14px;
+      border-radius: 5px; cursor: pointer; font-size: 0.85rem; font-weight: 600;
+    }
+    #import-drawer-btn:hover { background: #6a4a2a; }
+    #import-drawer {
+      position: fixed; top: 0; right: -420px; width: 400px; height: 100vh;
+      background: #1e1e1e; border-left: 1px solid #333; z-index: 500;
+      display: flex; flex-direction: column; transition: right 0.25s ease;
+      box-shadow: -4px 0 24px rgba(0,0,0,0.5);
+    }
+    #import-drawer.open { right: 0; }
+    #import-drawer-header {
+      display: flex; justify-content: space-between; align-items: center;
+      padding: 16px 20px; border-bottom: 1px solid #333;
+    }
+    #import-drawer-header h3 { font-size: 1rem; color: #fff; }
+    #import-drawer-header button {
+      background: none; border: none; color: #aaa; font-size: 1.3rem; cursor: pointer;
+    }
+    #import-drawer-header button:hover { color: #fff; }
+    #import-drawer-body { padding: 16px 20px; display: flex; flex-direction: column; gap: 12px; flex: 1; overflow: hidden; }
+    #import-drawer-body label { font-size: 0.8rem; color: #888; display: block; margin-bottom: 4px; }
+    #import-drawer-path {
+      width: 100%; background: #2a2a2a; border: 1px solid #444; color: #e0e0e0;
+      padding: 8px 10px; border-radius: 5px; font-size: 0.85rem; font-family: monospace;
+    }
+    #import-drawer-path:focus { outline: none; border-color: #666; }
+    #import-drawer-warning {
+      background: #3a2a1a; border: 1px solid #6a4a2a; border-radius: 5px;
+      padding: 8px 12px; font-size: 0.78rem; color: #d4935a;
+    }
+    #import-drawer-log {
+      flex: 1; overflow-y: auto; background: #141414; border: 1px solid #2a2a2a;
+      border-radius: 5px; padding: 10px; font-size: 0.75rem; font-family: monospace;
+      color: #666; min-height: 0;
+    }
+    #import-drawer-log .log-line { margin-bottom: 3px; }
+    #import-drawer-log .log-line.ok { color: #6a9f6a; }
+    #import-drawer-log .log-line.skip { color: #666; }
+    #import-drawer-log .log-line.done { color: #e8a060; font-weight: 600; }
+    #import-drawer-footer {
+      padding: 14px 20px; border-top: 1px solid #333; display: flex; gap: 8px;
+    }
+    #import-drawer-footer button {
+      flex: 1; padding: 8px; border-radius: 5px; border: none;
+      cursor: pointer; font-size: 0.85rem; font-weight: 600;
+    }
+    #import-drawer-go { background: #5a3a1a; color: #e8a060; }
+    #import-drawer-go:hover { background: #6a4a2a; }
+    #import-drawer-go:disabled { opacity: 0.5; cursor: default; }
+    #import-drawer-cancel { background: #333; color: #aaa; }
+    #import-drawer-cancel:hover { background: #3a3a3a; }
+
+    #link-btn.active { background: #3a5a3a; color: #8fcf8f; border: 1px solid #5a9f5a; }
+    #cluster-btn.active { background: #1a3a5a; color: #8fc0ef; border: 1px solid #5a8fbf; }
+    #filmstrip-btn.active { background: #3a1a5a; color: #c08fef; border: 1px solid #8f5abf; }
+    .filmstrip-row { margin-bottom: 28px; }
+    .filmstrip-row-header { font-size: 0.85rem; color: #888; margin-bottom: 10px; text-transform: uppercase; letter-spacing: 0.05em; }
+    .filmstrip-track { display: flex; gap: 8px; overflow-x: auto; padding-bottom: 6px; }
+    .filmstrip-track::-webkit-scrollbar { height: 6px; }
+    .filmstrip-track::-webkit-scrollbar-thumb { background: #444; border-radius: 3px; }
+    .filmstrip-thumb { flex-shrink: 0; cursor: pointer; border-radius: 6px; overflow: hidden; border: 2px solid transparent; }
+    .filmstrip-thumb.chain-tip { width: 144px; height: 144px; border-color: #8f5abf; }
+    .filmstrip-thumb:not(.chain-tip) { width: 120px; height: 120px; }
+    .filmstrip-thumb img { width: 100%; height: 100%; object-fit: cover; display: block; background: #333; }
+    #cluster-progress {
+      display: none; padding: 32px 0; text-align: center;
+    }
+    #cluster-progress progress { width: 60%; height: 10px; accent-color: #5a8fbf; }
+    #cluster-backend-label { font-size: 0.78rem; color: #888; margin-top: 8px; }
+    #link-confirm-bar {
+      display: none; position: fixed; bottom: 64px; left: 50%; transform: translateX(-50%);
+      background: #1e2e1e; border: 1px solid #5a9f5a; border-radius: 8px;
+      padding: 12px 18px; z-index: 9998; font-size: 0.85rem; color: #ccc;
+      display: none; align-items: center; gap: 12px; box-shadow: 0 4px 20px rgba(0,0,0,0.6);
+      white-space: nowrap;
+    }
+    #link-confirm-bar.open { display: flex; }
+    #link-confirm-bar button { border: none; padding: 5px 14px; border-radius: 5px; cursor: pointer; font-size: 0.82rem; font-weight: 600; }
+    #link-confirm-ok { background: #3a7a3a; color: #9fdf9f; }
+    #link-confirm-ok:hover { background: #4a8a4a; }
+    #link-confirm-cancel { background: #444; color: #aaa; }
+    #link-confirm-cancel:hover { background: #555; }
+    .card.link-selected-child { outline: 2px solid #8fcf8f; }
+    .card.link-selected-parent { outline: 2px solid #5a9f5a; }
+    .card.link-selectable:hover { outline: 2px solid #666; }
+  </style>
+</head>
+<body>
+  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
+    <h1 style="margin:0">Image Manager</h1>
+    <div style="display:flex;gap:8px;align-items:center;">
+      <button id="import-drawer-btn" onclick="openDrawer()">Import Folder</button>
+      <button id="filmstrip-btn" onclick="toggleFilmstripMode()"
+        style="background:#444;border:none;color:#ddd;padding:6px 14px;border-radius:5px;cursor:pointer;font-size:0.85rem">
+        Filmstrip
+      </button>
+      <button id="cluster-btn" onclick="toggleClusterMode()"
+        style="background:#444;border:none;color:#ddd;padding:6px 14px;border-radius:5px;cursor:pointer;font-size:0.85rem">
+        Cluster
+      </button>
+      <button id="link-btn" onclick="toggleLinkMode()"
+        style="background:#444;border:none;color:#ddd;padding:6px 14px;border-radius:5px;cursor:pointer;font-size:0.85rem">
+        Link
+      </button>
+      <button onclick="rebuildIndex()"
+        style="background:#444;border:none;color:#ddd;padding:6px 14px;border-radius:5px;cursor:pointer;font-size:0.85rem">
+        Rebuild Index
+      </button>
+    </div>
+  </div>
+
+  <!-- Drop zone -->
+  <div id="drop-zone"
+    style="border:2px dashed #555;border-radius:8px;padding:20px;text-align:center;color:#777;margin-bottom:24px;transition:border-color 0.15s;">
+    Drop images here to import
+  </div>
+
+  <div id="cluster-progress">
+    <progress id="cluster-bar" value="0" max="100"></progress>
+    <div id="cluster-backend-label"></div>
+  </div>
+  <div id="content"><div class="empty">Loading...</div></div>
+
+  <!-- Lightbox -->
+  <div id="lightbox" onclick="if(event.target===this)closeLightbox()">
+    <img id="lightbox-img" src="" alt="">
+    <div id="lightbox-actions">
+      <button id="lb-send">Send to Comfy</button>
+      <button id="lb-lineage">View Lineage</button>
+      <button onclick="closeLightbox()">Close</button>
+    </div>
+  </div>
+
+  <!-- Tree panel -->
+  <div id="tree-overlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.7);z-index:100;overflow:auto;padding:24px;">
+    <div style="max-width:900px;margin:0 auto;background:#2a2a2a;border-radius:10px;padding:24px;">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
+        <h2 id="tree-title" style="font-size:1.1rem"></h2>
+        <button onclick="closeTree()" style="background:none;border:none;color:#aaa;font-size:1.4rem;cursor:pointer">✕</button>
+      </div>
+      <div id="tree-content"></div>
+    </div>
+  </div>
+
+  <!-- Link confirm bar -->
+  <div id="link-confirm-bar">
+    <span id="link-confirm-msg">Select parent image</span>
+    <button id="link-confirm-ok" onclick="commitLink()" style="display:none">Set as Parent</button>
+    <button id="link-confirm-cancel" onclick="cancelLinkMode()">Cancel</button>
+  </div>
+
+  <!-- Import Drawer -->
+  <div id="import-drawer">
+    <div id="import-drawer-header">
+      <h3>Import Folder</h3>
+      <button onclick="closeDrawer()">✕</button>
+    </div>
+    <div id="import-drawer-body">
+      <div>
+        <label>Source folder path</label>
+        <input id="import-drawer-path" type="text" placeholder="/path/to/images" />
+      </div>
+      <div id="import-drawer-warning">
+        ⚠ Files will be <strong>moved</strong> into the managed folder. The source folder will be emptied. This cannot be undone.
+      </div>
+      <div id="import-drawer-log"><span style="color:#555">Import log will appear here…</span></div>
+    </div>
+    <div id="import-drawer-footer">
+      <button id="import-drawer-go" onclick="startImport()">Move &amp; Import</button>
+      <button id="import-drawer-cancel" onclick="closeDrawer()">Cancel</button>
+    </div>
+  </div>
+
+  <script>
+    function sendToComfy(uuid) {
+      fetch(`/image-manager/api/workflow/${uuid}`)
+        .then(r => r.json())
+        .then(workflow => {
+          if (window.parent && window.parent !== window) {
+            window.parent.postMessage({type: 'loadWorkflow', workflow}, '*');
+          } else {
+            alert('Send to Comfy only works when embedded in ComfyUI.');
+          }
+        });
+    }
+
+    function renderTreeNode(node, depth = 0) {
+      const indent = depth * 20;
+      return `
+        <div style="margin-left:${indent}px;margin-bottom:12px;display:flex;align-items:center;gap:12px;">
+          <img src="/image-manager/api/image/${node.uuid}" style="width:64px;height:64px;object-fit:cover;border-radius:4px;background:#333;">
+          <div>
+            <div style="font-size:0.85rem">${node.filename.split('/').pop()}</div>
+            <div style="font-size:0.75rem;color:#888">${node.created_at.slice(0,10)}</div>
+            <button onclick="sendToComfy('${node.uuid}')"
+              style="margin-top:4px;font-size:0.75rem;background:#444;border:none;color:#ddd;padding:2px 8px;border-radius:3px;cursor:pointer">
+              Send to Comfy
+            </button>
+          </div>
+        </div>
+        ${(node.children || []).map(c => renderTreeNode(c, depth + 1)).join('')}
+      `;
+    }
+
+    async function openTree(rootUuid, rootName) {
+      document.getElementById('tree-title').textContent = rootName;
+      document.getElementById('tree-content').innerHTML = 'Loading...';
+      document.getElementById('tree-overlay').style.display = 'block';
+      const data = await fetch(`/image-manager/api/tree/${rootUuid}`).then(r => r.json());
+      document.getElementById('tree-content').innerHTML = renderTreeNode(data);
+    }
+
+    function closeTree() { document.getElementById('tree-overlay').style.display = 'none'; }
+
+    let _lbUuid = null, _lbName = null;
+
+    function openLightbox(uuid, name, rootUuid) {
+      _lbUuid = uuid; _lbName = name;
+      document.getElementById('lightbox-img').src = `/image-manager/api/image/${uuid}`;
+      document.getElementById('lb-send').onclick = () => sendToComfy(uuid);
+      const lineageRoot = rootUuid || uuid;
+      document.getElementById('lb-lineage').onclick = () => { closeLightbox(); openTree(lineageRoot, name); };
+      document.getElementById('lightbox').classList.add('open');
+    }
+
+    function closeLightbox() {
+      document.getElementById('lightbox').classList.remove('open');
+      document.getElementById('lightbox-img').src = '';
+    }
+
+    document.addEventListener('keydown', e => {
+      if (document.activeElement && ['INPUT','TEXTAREA'].includes(document.activeElement.tagName)) return;
+      if (e.key === 'Escape') { closeLightbox(); closeTree(); closeDrawer(); cancelLinkMode(); }
+    });
+
+    async function load() {
+      const resp = await fetch('/image-manager/api/roots');
+      const roots = await resp.json();
+      if (roots.length === 0) {
+        document.getElementById('content').innerHTML = '<div class="empty">No images yet. Save some with ManagedSaveImage.</div>';
+        return;
+      }
+      const byDate = {};
+      for (const img of roots) {
+        const date = img.created_at.slice(0, 10);
+        (byDate[date] = byDate[date] || []).push(img);
+      }
+      const html = Object.entries(byDate)
+        .sort(([a], [b]) => b.localeCompare(a))
+        .map(([date, imgs]) => `
+          <div class="date-group">
+            <div class="date-label">${date}</div>
+            <div class="grid">
+              ${imgs.map(img => `
+                <div class="card" data-uuid="${img.uuid}" data-name="${img.root_name}" data-has-parent="${img.parent_uuid ? '1' : ''}"
+                  onclick="if(!linkCardClick('${img.uuid}','${img.root_name}',${img.parent_uuid ? 'true' : 'false'},this))openLightbox('${img.latest_uuid}', '${img.root_name}', '${img.uuid}')">
+                  <img src="/image-manager/api/image/${img.latest_uuid}" loading="lazy" alt="${img.root_name}">
+                  <div class="card-body">
+                    <div class="card-name">${img.root_name}</div>
+                    ${img.descendant_count > 0 ? `<div style="font-size:0.75rem;color:#888">${img.descendant_count} refinement${img.descendant_count !== 1 ? 's' : ''}</div>` : ''}
+                    <div style="display:flex;gap:6px;margin-top:4px;">
+                      <button onclick="event.stopPropagation();sendToComfy('${img.latest_uuid}')"
+                        style="flex:1;font-size:0.75rem;background:#444;border:none;color:#ddd;padding:2px 8px;border-radius:3px;cursor:pointer">
+                        Send to Comfy
+                      </button>
+                      <button onclick="event.stopPropagation();openTree('${img.uuid}','${img.root_name}')"
+                        style="flex:1;font-size:0.75rem;background:#333;border:none;color:#aaa;padding:2px 8px;border-radius:3px;cursor:pointer">
+                        Lineage
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              `).join('')}
+            </div>
+          </div>
+        `).join('');
+      document.getElementById('content').innerHTML = html;
+    }
+
+    async function rebuildIndex() {
+      if (_clusterMode) exitClusterMode();
+      await fetch('/image-manager/api/rebuild', {method: 'POST'});
+      _filmstripMode ? renderFilmstrip() : load();
+    }
+
+    const dz = document.getElementById('drop-zone');
+    dz.addEventListener('dragover', e => { e.preventDefault(); dz.style.borderColor = '#aaa'; });
+    dz.addEventListener('dragleave', () => { dz.style.borderColor = '#555'; });
+    dz.addEventListener('drop', async e => {
+      e.preventDefault();
+      dz.style.borderColor = '#555';
+      for (const file of e.dataTransfer.files) {
+        if (!file.type.startsWith('image/')) continue;
+        const form = new FormData();
+        form.append('file', file);
+        form.append('filename', file.name);
+        await fetch('/image-manager/api/import', {method: 'POST', body: form});
+      }
+      load();
+    });
+
+    if (_filmstripMode) {
+      document.getElementById('filmstrip-btn').classList.add('active');
+      document.getElementById('filmstrip-btn').textContent = 'Filmstrip ✓';
+      renderFilmstrip();
+    } else {
+      load();
+    }
+
+    // ── Link mode ───────────────────────────────────────────────────
+
+    let _linkMode = false;
+    let _linkChild = null;
+    let _linkParent = null;
+
+    function toggleLinkMode() {
+      _linkMode ? cancelLinkMode() : enterLinkMode();
+    }
+
+    function enterLinkMode() {
+      _linkMode = true;
+      _linkChild = null;
+      _linkParent = null;
+      document.getElementById('link-btn').classList.add('active');
+      document.getElementById('link-btn').textContent = 'Linking…';
+      document.getElementById('link-confirm-bar').classList.add('open');
+      document.getElementById('link-confirm-msg').textContent = 'Click an image to select it as child';
+      document.getElementById('link-confirm-ok').style.display = 'none';
+      document.querySelectorAll('.card').forEach(c => c.classList.add('link-selectable'));
+    }
+
+    function cancelLinkMode() {
+      _linkMode = false;
+      _linkChild = null;
+      _linkParent = null;
+      document.getElementById('link-btn').classList.remove('active');
+      document.getElementById('link-btn').textContent = 'Link';
+      document.getElementById('link-confirm-bar').classList.remove('open');
+      document.querySelectorAll('.card').forEach(c => {
+        c.classList.remove('link-selectable', 'link-selected-child', 'link-selected-parent');
+      });
+    }
+
+    function linkCardClick(uuid, name, hasParent, cardEl) {
+      if (!_linkMode) return false;
+      if (!_linkChild) {
+        _linkChild = {uuid, name, hasParent};
+        cardEl.classList.remove('link-selectable');
+        cardEl.classList.add('link-selected-child');
+        const msg = hasParent
+          ? `"${name}" selected as child (already has a parent — will reassign). Now click the new parent.`
+          : `"${name}" selected as child. Now click the new parent.`;
+        document.getElementById('link-confirm-msg').textContent = msg;
+      } else if (!_linkParent && uuid !== _linkChild.uuid) {
+        _linkParent = {uuid, name};
+        cardEl.classList.remove('link-selectable');
+        cardEl.classList.add('link-selected-parent');
+        document.getElementById('link-confirm-msg').textContent =
+          `Link "${_linkChild.name}" → "${_linkParent.name}"?`;
+        document.getElementById('link-confirm-ok').style.display = 'inline-block';
+      }
+      return true;
+    }
+
+    async function commitLink() {
+      if (!_linkChild || !_linkParent) return;
+      const btn = document.getElementById('link-confirm-ok');
+      btn.disabled = true;
+      btn.textContent = 'Saving…';
+      try {
+        const resp = await fetch('/image-manager/api/set-parent', {
+          method: 'POST',
+          headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify({child_uuid: _linkChild.uuid, parent_uuid: _linkParent.uuid}),
+        });
+        if (!resp.ok) {
+          const text = await resp.text();
+          alert(`Failed: ${text}`);
+        }
+      } catch (e) {
+        alert(`Error: ${e}`);
+      }
+      cancelLinkMode();
+      load();
+    }
+
+    // ── Filmstrip mode ───────────────────────────────────────────────
+
+    let _filmstripMode = localStorage.getItem('imageManager.viewMode') === 'filmstrip';
+
+    function toggleFilmstripMode() {
+      _filmstripMode ? exitFilmstripMode() : enterFilmstripMode();
+    }
+
+    function exitFilmstripMode() {
+      _filmstripMode = false;
+      localStorage.setItem('imageManager.viewMode', 'grid');
+      document.getElementById('filmstrip-btn').classList.remove('active');
+      document.getElementById('filmstrip-btn').textContent = 'Filmstrip';
+      load();
+    }
+
+    async function enterFilmstripMode() {
+      if (_clusterMode) exitClusterMode();
+      _filmstripMode = true;
+      localStorage.setItem('imageManager.viewMode', 'filmstrip');
+      document.getElementById('filmstrip-btn').classList.add('active');
+      document.getElementById('filmstrip-btn').textContent = 'Filmstrip ✓';
+      await renderFilmstrip();
+    }
+
+    async function renderFilmstrip() {
+      const resp = await fetch('/image-manager/api/chains');
+      const chains = await resp.json();
+      const content = document.getElementById('content');
+      if (chains.length === 0) {
+        content.innerHTML = '<div class="empty">No images yet. Save some with ManagedSaveImage.</div>';
+        return;
+      }
+      content.innerHTML = chains.map(chain => `
+        <div class="filmstrip-row">
+          <div class="filmstrip-row-header">${chain.root_name} · ${chain.images.length} image${chain.images.length !== 1 ? 's' : ''}</div>
+          <div class="filmstrip-track">
+            ${chain.images.map((img, i) => `
+              <div class="filmstrip-thumb${i === 0 ? ' chain-tip' : ''}"
+                onclick="openLightbox('${img.uuid}', '${chain.root_name}', '${chain.root_uuid}')">
+                <img src="/image-manager/api/image/${img.uuid}" loading="lazy" alt="${chain.root_name}">
+              </div>
+            `).join('')}
+          </div>
+        </div>
+      `).join('');
+    }
+
+    // ── Cluster mode ────────────────────────────────────────────────
+
+    let _clusterMode = false;
+
+    function toggleClusterMode() {
+      _clusterMode ? exitClusterMode() : enterClusterMode();
+    }
+
+    function exitClusterMode() {
+      _clusterMode = false;
+      document.getElementById('cluster-btn').classList.remove('active');
+      document.getElementById('cluster-btn').textContent = 'Cluster';
+      document.getElementById('cluster-progress').style.display = 'none';
+      _filmstripMode ? renderFilmstrip() : load();
+    }
+
+    async function enterClusterMode() {
+      _clusterMode = true;
+      const btn = document.getElementById('cluster-btn');
+      btn.classList.add('active');
+      btn.textContent = 'Clustering…';
+
+      const progressEl = document.getElementById('cluster-progress');
+      const bar = document.getElementById('cluster-bar');
+      const label = document.getElementById('cluster-backend-label');
+      const content = document.getElementById('content');
+
+      progressEl.style.display = 'block';
+      content.innerHTML = '';
+      bar.value = 0;
+      label.textContent = '';
+
+      try {
+        const resp = await fetch('/image-manager/api/cluster', {method: 'POST'});
+        const reader = resp.body.getReader();
+        const decoder = new TextDecoder();
+        let buf = '';
+        let clusters = null;
+
+        while (true) {
+          const {done, value} = await reader.read();
+          if (done) break;
+          buf += decoder.decode(value, {stream: true});
+          const chunks = buf.split('\n\n');
+          buf = chunks.pop();
+          for (const chunk of chunks) {
+            if (!chunk.startsWith('data:')) continue;
+            const ev = JSON.parse(chunk.slice(5).trim());
+            if (ev.status === 'backend') {
+              label.textContent = ev.msg;
+            } else if (ev.status === 'progress') {
+              bar.max = ev.total;
+              bar.value = ev.current;
+            } else if (ev.status === 'done') {
+              clusters = ev.clusters;
+            }
+          }
+        }
+
+        progressEl.style.display = 'none';
+        btn.textContent = 'Cluster ✓';
+
+        if (!clusters || Object.keys(clusters).length === 0) {
+          content.innerHTML = '<div class="empty">No images to cluster.</div>';
+          return;
+        }
+
+        // Fetch all root metadata to render cards
+        const roots = await fetch('/image-manager/api/roots').then(r => r.json());
+        const byUuid = Object.fromEntries(roots.map(r => [r.uuid, r]));
+
+        const html = Object.entries(clusters)
+          .sort(([a], [b]) => Number(a) - Number(b))
+          .map(([label_id, uuids], i) => {
+            const imgs = uuids.map(u => byUuid[u]).filter(Boolean);
+            return `
+              <div class="date-group">
+                <div class="date-label">Cluster ${i + 1} · ${imgs.length} image${imgs.length !== 1 ? 's' : ''}</div>
+                <div class="grid">
+                  ${imgs.map(img => `
+                    <div class="card" data-uuid="${img.uuid}" data-name="${img.root_name}"
+                      onclick="if(!linkCardClick('${img.uuid}','${img.root_name}',${img.parent_uuid ? 'true' : 'false'},this))openLightbox('${img.latest_uuid}', '${img.root_name}', '${img.uuid}')">
+                      <img src="/image-manager/api/image/${img.latest_uuid}" loading="lazy" alt="${img.root_name}">
+                      <div class="card-body">
+                        <div class="card-name">${img.root_name}</div>
+                        ${img.descendant_count > 0 ? `<div style="font-size:0.75rem;color:#888">${img.descendant_count} refinement${img.descendant_count !== 1 ? 's' : ''}</div>` : ''}
+                        <div style="display:flex;gap:6px;margin-top:4px;">
+                          <button onclick="event.stopPropagation();sendToComfy('${img.latest_uuid}')"
+                            style="flex:1;font-size:0.75rem;background:#444;border:none;color:#ddd;padding:2px 8px;border-radius:3px;cursor:pointer">
+                            Send to Comfy
+                          </button>
+                          <button onclick="event.stopPropagation();openTree('${img.uuid}','${img.root_name}')"
+                            style="flex:1;font-size:0.75rem;background:#333;border:none;color:#aaa;padding:2px 8px;border-radius:3px;cursor:pointer">
+                            Lineage
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  `).join('')}
+                </div>
+              </div>
+            `;
+          }).join('');
+        content.innerHTML = html;
+      } catch (e) {
+        progressEl.style.display = 'none';
+        btn.classList.remove('active');
+        btn.textContent = 'Cluster';
+        _clusterMode = false;
+        content.innerHTML = `<div class="empty">Clustering failed: ${e}</div>`;
+      }
+    }
+
+    // ── Import Drawer ───────────────────────────────────────────────
+
+    function openDrawer() { document.getElementById('import-drawer').classList.add('open'); }
+    function closeDrawer() { document.getElementById('import-drawer').classList.remove('open'); }
+
+    async function startImport() {
+      const path = document.getElementById('import-drawer-path').value.trim();
+      if (!path) return;
+      const btn = document.getElementById('import-drawer-go');
+      const log = document.getElementById('import-drawer-log');
+      btn.disabled = true;
+      log.innerHTML = '';
+
+      const appendLine = (status, text) => {
+        const line = document.createElement('div');
+        line.className = 'log-line ' + status;
+        line.textContent = text;
+        log.appendChild(line);
+        log.scrollTop = log.scrollHeight;
+      };
+
+      try {
+        const resp = await fetch('/image-manager/api/import-folder', {
+          method: 'POST',
+          headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify({path}),
+        });
+        if (!resp.ok) {
+          appendLine('', `Error: ${await resp.text()}`);
+          return;
+        }
+        const reader = resp.body.getReader();
+        const decoder = new TextDecoder();
+        let buf = '';
+        while (true) {
+          const {done, value} = await reader.read();
+          if (done) break;
+          buf += decoder.decode(value, {stream: true});
+          const events = buf.split('\n\n');
+          buf = events.pop();
+          for (const ev of events) {
+            if (!ev.startsWith('data: ')) continue;
+            const data = JSON.parse(ev.slice(6));
+            if (data.status === 'done') {
+              appendLine('done', `✓ ${data.msg}`);
+            } else if (data.status === 'skip') {
+              appendLine('skip', `– skip  ${data.msg}`);
+            } else {
+              appendLine('ok', `✓ moved ${data.msg}`);
+            }
+          }
+        }
+        load();
+      } catch (e) {
+        appendLine('', `Error: ${e}`);
+      } finally {
+        btn.disabled = false;
+      }
+    }
+  </script>
+</body>
+</html>
