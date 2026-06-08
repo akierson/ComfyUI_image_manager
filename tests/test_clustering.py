@@ -58,3 +58,24 @@ def test_auto_cluster_returns_label_per_image(small_images):
 def test_auto_cluster_empty_input():
     labels = clustering.auto_cluster(np.empty((0, 192)))
     assert labels == []
+
+
+# --- k_scale ---
+
+def _make_embeddings(n: int, dims: int = 192) -> np.ndarray:
+    rng = np.random.default_rng(42)
+    return rng.standard_normal((n, dims)).astype(np.float32)
+
+
+def test_k_scale_low_gives_fewer_clusters_than_default():
+    embeddings = _make_embeddings(50)
+    default_labels = clustering.auto_cluster(embeddings)
+    low_labels = clustering.auto_cluster(embeddings, k_scale=0.5)
+    assert len(set(low_labels)) <= len(set(default_labels))
+
+
+def test_k_scale_high_gives_more_clusters_than_default():
+    embeddings = _make_embeddings(50)
+    default_labels = clustering.auto_cluster(embeddings)
+    high_labels = clustering.auto_cluster(embeddings, k_scale=2.0)
+    assert len(set(high_labels)) >= len(set(default_labels))

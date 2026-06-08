@@ -31,7 +31,7 @@ def embed_images(abs_paths: list, backend: str = None) -> np.ndarray:
             hist = []
             for ch in img.split():
                 h = ch.histogram()[:256]
-                bins = [sum(h[i*4:(i+1)*4]) for i in range(64)]
+                bins = [sum(h[i * 4 : (i + 1) * 4]) for i in range(64)]
                 hist.extend(bins)
             arr = np.array(hist, dtype=np.float32)
             norm = np.linalg.norm(arr)
@@ -44,7 +44,9 @@ def embed_images(abs_paths: list, backend: str = None) -> np.ndarray:
         import torch
         import open_clip
 
-        model, _, preprocess = open_clip.create_model_and_transforms("ViT-B-32", pretrained="openai")
+        model, _, preprocess = open_clip.create_model_and_transforms(
+            "ViT-B-32", pretrained="openai"
+        )
         model.eval()
         device = "cuda" if torch.cuda.is_available() else "cpu"
         model = model.to(device)
@@ -52,7 +54,9 @@ def embed_images(abs_paths: list, backend: str = None) -> np.ndarray:
         rows = []
         with torch.no_grad():
             for path in abs_paths:
-                img = preprocess(Image.open(path).convert("RGB")).unsqueeze(0).to(device)
+                img = (
+                    preprocess(Image.open(path).convert("RGB")).unsqueeze(0).to(device)
+                )
                 feat = model.encode_image(img)
                 feat = feat / feat.norm(dim=-1, keepdim=True)
                 rows.append(feat.squeeze(0).cpu().float().numpy())
@@ -83,9 +87,9 @@ def embed_images(abs_paths: list, backend: str = None) -> np.ndarray:
     raise ValueError(f"Unknown backend: {backend}")
 
 
-def auto_cluster(embeddings: np.ndarray) -> list:
+def auto_cluster(embeddings: np.ndarray, k_scale: float = 1.0) -> list:
+    import math
     from sklearn.cluster import KMeans
-    from sklearn.metrics import silhouette_score
 
     n = len(embeddings)
     if n == 0:
@@ -93,18 +97,11 @@ def auto_cluster(embeddings: np.ndarray) -> list:
     if n == 1:
         return [0]
 
-    best_k, best_score, best_labels = 2, -1, None
-    for k in range(2, min(11, n // 2 + 1)):
-        km = KMeans(n_clusters=k, n_init="auto", random_state=0)
-        labels = km.fit_predict(embeddings)
-        if len(set(labels)) < 2:
-            continue
-        score = silhouette_score(embeddings, labels)
-        if score > best_score:
-            best_k, best_score, best_labels = k, score, labels
+    # Silhouette scoring fails for CLIP embeddings in high dimensions — it consistently
+    # picks k=2 regardless of semantic content. Scale k with image count instead.
+    k = max(2, min(n / 3, round(math.sqrt(n / 2) * k_scale)))
+    k = min(k, n)
 
-    if best_labels is None:
-        km = KMeans(n_clusters=2, n_init="auto", random_state=0)
-        best_labels = km.fit_predict(embeddings)
-
-    return [int(l) for l in best_labels]
+    km = KMeans(n_clusters=k, n_init="auto", random_state=0)
+    labels = km.fit_predict(embeddings)
+    return [int(l) for l in labels]

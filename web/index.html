@@ -4,31 +4,90 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Image Manager</title>
+  <link rel="icon" type="image/svg+xml" href="/image-manager/favicon.svg">
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body { background: #1a1a1a; color: #e0e0e0; font-family: system-ui, sans-serif; padding: 24px; }
     h1 { font-size: 1.4rem; margin-bottom: 24px; color: #fff; }
     .date-group { margin-bottom: 32px; }
-    .date-label { font-size: 0.85rem; color: #888; margin-bottom: 12px; text-transform: uppercase; letter-spacing: 0.05em; }
+    .date-label { font-size: 0.85rem; color: #888; margin-bottom: 12px; text-transform: uppercase; letter-spacing: 0.05em; cursor: default; }
+    .date-label.collapsible { cursor: pointer; user-select: none; display: flex; align-items: center; gap: 6px; }
+    .date-label.collapsible:hover { color: #bbb; }
+    .collapse-chevron { display: inline-block; transition: transform 0.15s; }
+    .date-group.collapsed .collapse-chevron { transform: rotate(-90deg); }
+    .date-group.collapsed .grid { display: none; }
     .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 12px; }
-    .card { background: #2a2a2a; border-radius: 8px; overflow: hidden; cursor: pointer; transition: transform 0.15s; }
+    .card { background: #2a2a2a; border-radius: 8px; overflow: hidden; cursor: pointer; transition: transform 0.15s; position: relative; }
     .card:hover { transform: scale(1.02); }
     .card img { width: 100%; aspect-ratio: 1; object-fit: cover; display: block; background: #333; }
     .card-body { padding: 8px 10px; }
     .card-name { font-size: 0.8rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .card-tip { font-size: 0.72rem; color: #777; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-top: 2px; }
     .empty { color: #666; text-align: center; padding: 60px 0; }
-    #lightbox { display:none;position:fixed;inset:0;background:rgba(0,0,0,0.85);z-index:200;align-items:center;justify-content:center;flex-direction:column; }
+    #lightbox { display:none;position:fixed;inset:0;background:rgba(0,0,0,0.85);z-index:200;align-items:center;justify-content:center; }
     #lightbox.open { display:flex; }
-    #lightbox img { max-width:90vw;max-height:80vh;object-fit:contain;border-radius:6px; }
-    #lightbox-actions { margin-top:14px;display:flex;gap:10px; }
-    #lightbox-actions button { background:#444;border:none;color:#ddd;padding:6px 16px;border-radius:5px;cursor:pointer;font-size:0.85rem; }
-    #lightbox-actions button:hover { background:#555; }
+    #lb-inner { display:flex;gap:24px;max-height:90vh;max-width:95vw;align-items:flex-start; }
+    #lb-image-area { flex:1;min-width:0;display:flex;align-items:center;justify-content:center; }
+    #lightbox-img { max-width:100%;max-height:85vh;object-fit:contain;border-radius:6px; }
+    #lb-panel { width:300px;flex-shrink:0;background:#2a2a2a;border-radius:8px;display:flex;flex-direction:column;max-height:90vh; }
+    #lb-panel-content { flex:1;overflow-y:auto;padding:16px; }
+    #lb-panel-footer { padding:12px 16px;border-top:1px solid #333;display:flex;flex-direction:column;gap:8px; }
+    .lb-footer-row { display:flex;gap:8px; }
+    .lb-footer-row button, #lb-panel-footer > button { background:#444;border:none;color:#ddd;padding:6px 12px;border-radius:5px;cursor:pointer;font-size:0.82rem;flex:1; }
+    .lb-footer-row button:hover, #lb-panel-footer > button:hover { background:#555; }
+    .lb-section { margin-bottom:16px; }
+    .lb-section-title { font-size:0.7rem;text-transform:uppercase;letter-spacing:0.08em;color:#666;margin-bottom:8px;border-bottom:1px solid #333;padding-bottom:4px; }
+    .lb-row { display:flex;justify-content:space-between;align-items:baseline;gap:8px;margin-bottom:5px;font-size:0.82rem; }
+    .lb-label { color:#888;flex-shrink:0; }
+    .lb-val { color:#e0e0e0;text-align:right;word-break:break-word; }
+    .lb-prompt-block { margin-bottom:10px; }
+    .lb-prompt-block .lb-label { display:block;margin-bottom:3px; }
+    .lb-prompt { font-size:0.8rem;color:#ccc;white-space:pre-wrap;word-break:break-word;line-height:1.45;background:#222;border-radius:4px;padding:6px 8px; }
+    .lb-no-workflow { color:#666;font-size:0.82rem;font-style:italic;padding:4px 0; }
+    .lb-loras { font-size:0.8rem;color:#ccc; }
+    .lb-loras div { margin-bottom:2px; }
 
     #import-drawer-btn {
       background: #5a3a1a; border: none; color: #e8a060; padding: 6px 14px;
       border-radius: 5px; cursor: pointer; font-size: 0.85rem; font-weight: 600;
     }
     #import-drawer-btn:hover { background: #6a4a2a; }
+    #settings-btn {
+      background: #2e2e2e; border: 1px solid #444; color: #999; padding: 6px 10px;
+      border-radius: 5px; cursor: pointer; font-size: 1rem; line-height: 1;
+    }
+    #settings-btn:hover { background: #3a3a3a; color: #ddd; }
+    #drawer-backdrop {
+      display: none; position: fixed; inset: 0; z-index: 499;
+    }
+    #drawer-backdrop.open { display: block; }
+    #settings-drawer {
+      position: fixed; top: 0; right: -420px; width: 400px; height: 100vh;
+      background: #1e1e1e; border-left: 1px solid #333; z-index: 500;
+      display: flex; flex-direction: column; transition: right 0.25s ease;
+      box-shadow: -4px 0 24px rgba(0,0,0,0.5);
+    }
+    #settings-drawer.open { right: 0; }
+    #settings-drawer-header {
+      display: flex; justify-content: space-between; align-items: center;
+      padding: 16px 20px; border-bottom: 1px solid #333;
+    }
+    #settings-drawer-header h3 { font-size: 1rem; color: #fff; }
+    #settings-drawer-header button {
+      background: none; border: none; color: #aaa; font-size: 1.3rem; cursor: pointer;
+    }
+    #settings-drawer-header button:hover { color: #fff; }
+    #settings-drawer-body { padding: 16px 20px; display: flex; flex-direction: column; gap: 20px; flex: 1; overflow-y: auto; }
+    .settings-section-title {
+      font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.08em;
+      color: #666; margin-bottom: 12px; border-bottom: 1px solid #2a2a2a; padding-bottom: 6px;
+    }
+    .settings-row { display: flex; flex-direction: column; gap: 6px; }
+    .settings-row label { font-size: 0.8rem; color: #888; display: flex; justify-content: space-between; align-items: center; }
+    .settings-row label span { color: #e0e0e0; font-weight: 600; font-size: 0.85rem; }
+    #settings-k-scale { width: 100%; accent-color: #5a8fbf; cursor: pointer; }
+    .settings-range-labels { display: flex; justify-content: space-between; font-size: 0.72rem; color: #555; margin-top: 2px; }
+    .settings-hint { font-size: 0.75rem; color: #555; margin-top: 4px; line-height: 1.4; }
     #import-drawer {
       position: fixed; top: 0; right: -420px; width: 400px; height: 100vh;
       background: #1e1e1e; border-left: 1px solid #333; z-index: 500;
@@ -81,6 +140,23 @@
     #link-btn.active { background: #3a5a3a; color: #8fcf8f; border: 1px solid #5a9f5a; }
     #cluster-btn.active { background: #1a3a5a; color: #8fc0ef; border: 1px solid #5a8fbf; }
     #filmstrip-btn.active { background: #3a1a5a; color: #c08fef; border: 1px solid #8f5abf; }
+    #flat-btn.active { background: #1a3a2a; color: #8fefb0; border: 1px solid #5abf80; }
+    #order-btn.active { background: #3a2a1a; color: #efb060; border: 1px solid #bf8f3a; }
+    .order-violation-card {
+      background: #2a2a2a; border: 1px solid #444; border-radius: 8px;
+      padding: 16px; margin-bottom: 16px; max-width: 560px;
+    }
+    .order-violation-pair { display: flex; flex-direction: column; gap: 8px; margin-bottom: 12px; }
+    .order-violation-row { display: flex; align-items: center; gap: 12px; }
+    .order-violation-thumb { width: 64px; height: 64px; object-fit: cover; border-radius: 4px; background: #333; flex-shrink: 0; }
+    .order-violation-info { font-size: 0.85rem; color: #ccc; }
+    .order-violation-info .ts { color: #e07050; font-size: 0.78rem; }
+    .order-violation-arrow { color: #666; font-size: 0.78rem; margin-left: 76px; }
+    .order-violation-suggestion { font-size: 0.82rem; color: #aaa; margin-bottom: 10px; }
+    .order-violation-actions { display: flex; gap: 8px; }
+    .order-violation-actions button { padding: 5px 14px; border-radius: 4px; border: none; cursor: pointer; font-size: 0.82rem; }
+    .order-swap-btn { background: #3a5a3a; color: #8fcf8f; }
+    .order-skip-btn { background: #444; color: #aaa; }
     .filmstrip-row { margin-bottom: 28px; }
     .filmstrip-row-header { font-size: 0.85rem; color: #888; margin-bottom: 10px; text-transform: uppercase; letter-spacing: 0.05em; }
     .filmstrip-track { display: flex; gap: 8px; overflow-x: auto; padding-bottom: 6px; }
@@ -95,29 +171,159 @@
     }
     #cluster-progress progress { width: 60%; height: 10px; accent-color: #5a8fbf; }
     #cluster-backend-label { font-size: 0.78rem; color: #888; margin-top: 8px; }
-    #link-confirm-bar {
+    .gen-badge {
+      position: absolute; top: 5px; left: 5px;
+      background: rgba(0,0,0,0.6); color: #eee;
+      font-size: 0.65rem; font-weight: 700; padding: 1px 5px;
+      border-radius: 3px; pointer-events: none;
+    }
+    .card.card-selected, .filmstrip-thumb.card-selected { outline: 2px solid #5abf5a; background: #1a2a1a; }
+    body.picking-parent .card:not(.card-selected), body.picking-parent .filmstrip-thumb:not(.card-selected) { outline: 1px dashed #888; }
+    body.picking-parent .card:not(.card-selected):hover, body.picking-parent .filmstrip-thumb:not(.card-selected):hover { outline: 2px solid #aaa; }
+    .ctx-item { padding: 7px 16px; cursor: pointer; font-size: 0.85rem; color: #ddd; white-space: nowrap; }
+    .ctx-item:hover { background: #3a3a3a; }
+    .ctx-item-danger { color: #ef8080; }
+    .ctx-separator { border-top: 1px solid #444; margin: 4px 0; }
+    #selection-bar {
       display: none; position: fixed; bottom: 64px; left: 50%; transform: translateX(-50%);
-      background: #1e2e1e; border: 1px solid #5a9f5a; border-radius: 8px;
+      background: #1a2a3a; border: 1px solid #5a8fbf; border-radius: 8px;
       padding: 12px 18px; z-index: 9998; font-size: 0.85rem; color: #ccc;
-      display: none; align-items: center; gap: 12px; box-shadow: 0 4px 20px rgba(0,0,0,0.6);
+      align-items: center; gap: 12px; box-shadow: 0 4px 20px rgba(0,0,0,0.6);
       white-space: nowrap;
     }
-    #link-confirm-bar.open { display: flex; }
-    #link-confirm-bar button { border: none; padding: 5px 14px; border-radius: 5px; cursor: pointer; font-size: 0.82rem; font-weight: 600; }
-    #link-confirm-ok { background: #3a7a3a; color: #9fdf9f; }
-    #link-confirm-ok:hover { background: #4a8a4a; }
-    #link-confirm-cancel { background: #444; color: #aaa; }
-    #link-confirm-cancel:hover { background: #555; }
-    .card.link-selected-child { outline: 2px solid #8fcf8f; }
-    .card.link-selected-parent { outline: 2px solid #5a9f5a; }
-    .card.link-selectable:hover { outline: 2px solid #666; }
+    #selection-bar.open { display: flex; }
+    #selection-bar button { border: none; padding: 5px 14px; border-radius: 5px; cursor: pointer; font-size: 0.82rem; font-weight: 600; }
+    #selection-link-btn { background: #3a5a8a; color: #9fcfef; }
+    #selection-link-btn:hover { background: #4a6a9a; }
+    #selection-fork-btn { background: #4a3a6a; color: #c09fef; }
+    #selection-fork-btn:hover { background: #5a4a7a; }
+    #selection-delete-btn { background: #6a2a2a; color: #ef9f9f; }
+    #selection-delete-btn:hover { background: #7a3a3a; }
+    #move-dialog-backdrop {
+      display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.6); z-index: 10000;
+      align-items: center; justify-content: center;
+    }
+    #move-dialog-backdrop.open { display: flex; }
+    #move-dialog {
+      background: #222; border: 1px solid #555; border-radius: 10px;
+      padding: 24px 28px; min-width: 320px; display: flex; flex-direction: column; gap: 14px;
+    }
+    #move-dialog h3 { margin: 0; font-size: 1rem; color: #ddd; }
+    #move-folder-input {
+      background: #111; border: 1px solid #555; border-radius: 5px;
+      color: #ddd; padding: 6px 10px; font-size: 0.9rem; width: 100%;
+    }
+    #move-folder-input:focus { outline: none; border-color: #5a8fbf; }
+    #move-folder-list { display: flex; flex-direction: column; gap: 4px; max-height: 160px; overflow-y: auto; }
+    .move-folder-option {
+      padding: 5px 10px; border-radius: 4px; cursor: pointer; font-size: 0.85rem; color: #aaa;
+    }
+    .move-folder-option:hover { background: #333; color: #ddd; }
+    #move-dialog-actions { display: flex; gap: 8px; justify-content: flex-end; }
+    #move-dialog-confirm { background: #3a5a8a; color: #9fcfef; border: none; padding: 6px 16px; border-radius: 5px; cursor: pointer; font-weight: 600; }
+    #move-dialog-confirm:hover { background: #4a6a9a; }
+    #move-dialog-cancel { background: #444; color: #aaa; border: none; padding: 6px 16px; border-radius: 5px; cursor: pointer; }
+    #move-dialog-cancel:hover { background: #555; }
+    #page-body { display: flex; gap: 0; align-items: flex-start; position: relative; }
+    #sidebar {
+      width: 220px; flex-shrink: 0; background: #1e1e1e; border-right: 1px solid #2e2e2e;
+      border-radius: 8px 0 0 8px; margin-right: 16px; transition: width 0.2s, opacity 0.2s, margin 0.2s;
+      overflow: hidden;
+    }
+    #sidebar.collapsed { width: 0; margin-right: 0; opacity: 0; pointer-events: none; }
+    #sidebar-header {
+      display: flex; justify-content: space-between; align-items: center;
+      padding: 10px 12px; border-bottom: 1px solid #2e2e2e;
+    }
+    #sidebar-header span { font-size: 0.78rem; color: #888; text-transform: uppercase; letter-spacing: 0.05em; }
+    #sidebar-collapse-btn {
+      background: none; border: none; color: #666; cursor: pointer; font-size: 1rem;
+      padding: 0 2px; line-height: 1;
+    }
+    #sidebar-collapse-btn:hover { color: #aaa; }
+    #sidebar-expand-btn {
+      display: none; background: #2a2a2a; border: 1px solid #3a3a3a; border-radius: 4px;
+      color: #666; cursor: pointer; padding: 4px 8px; font-size: 0.85rem; margin-right: 8px;
+    }
+    #sidebar-expand-btn.visible { display: inline-block; }
+    #sidebar-expand-btn:hover { color: #aaa; }
+    #sidebar-tree { padding: 8px 0; }
+    .sidebar-all { padding: 6px 12px; font-size: 0.82rem; color: #7ab0ef; cursor: pointer; display: block; }
+    .sidebar-all:hover, .sidebar-all.active { background: #252535; }
+    .sidebar-count { color: #555; font-size: 0.72rem; }
+    .sidebar-root-name {
+      padding: 4px 12px; font-size: 0.78rem; color: #aaa; cursor: pointer;
+      display: flex; justify-content: space-between; align-items: center; position: relative;
+    }
+    .sidebar-root-name:hover, .sidebar-root-name.active { background: #252535; color: #ddd; }
+    .sidebar-folder-actions {
+      display: none; gap: 2px; flex-shrink: 0;
+    }
+    .sidebar-root-name:hover .sidebar-folder-actions { display: flex; }
+    .sidebar-folder-actions button {
+      background: none; border: none; color: #888; cursor: pointer; padding: 1px 4px;
+      font-size: 0.72rem; border-radius: 3px;
+    }
+    .sidebar-folder-actions button:hover { color: #ddd; background: #333; }
+    .sidebar-rename-input {
+      background: #1a1a2e; border: 1px solid #555; color: #ddd; border-radius: 4px;
+      font-size: 0.78rem; padding: 2px 6px; width: 100%; box-sizing: border-box;
+    }
+    .sidebar-rename-error { color: #e06c75; font-size: 0.7rem; padding: 2px 12px; }
+    #delete-folder-dialog {
+      display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.7);
+      z-index: 9999; align-items: center; justify-content: center;
+    }
+    #delete-folder-dialog.open { display: flex; }
+    #delete-folder-dialog-inner {
+      background: #2a2a2a; border-radius: 10px; padding: 24px; width: 360px;
+      box-shadow: 0 8px 32px rgba(0,0,0,0.6);
+    }
+    #main-area { flex: 1; min-width: 0; }
+
+    #fork-dialog {
+      display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.7);
+      z-index: 9999; align-items: center; justify-content: center;
+    }
+    #fork-dialog.open { display: flex; }
+    #fork-dialog-inner {
+      background: #2a2a2a; border-radius: 10px; padding: 24px; width: 360px;
+      box-shadow: 0 8px 32px rgba(0,0,0,0.6);
+    }
+    #fork-dialog-inner h3 { font-size: 1rem; margin-bottom: 16px; color: #e0e0e0; }
+    #fork-folder-input {
+      width: 100%; background: #1e1e1e; border: 1px solid #444; color: #e0e0e0;
+      padding: 8px 10px; border-radius: 5px; font-size: 0.9rem; margin-bottom: 8px;
+    }
+    #fork-folder-input:focus { outline: none; border-color: #666; }
+    #fork-dialog-error { color: #e07070; font-size: 0.8rem; min-height: 1.2em; margin-bottom: 10px; }
+    #fork-dialog-btns { display: flex; gap: 8px; }
+    #fork-dialog-btns button { flex: 1; padding: 8px; border: none; border-radius: 5px; cursor: pointer; font-size: 0.85rem; font-weight: 600; }
+    #fork-ok-btn { background: #3a5a7a; color: #8fc0ef; }
+    #fork-ok-btn:hover:not(:disabled) { background: #4a6a8a; }
+    #fork-ok-btn:disabled { opacity: 0.5; cursor: default; }
+    #fork-cancel-btn { background: #444; color: #aaa; }
+    #fork-cancel-btn:hover { background: #555; }
+    .tree-node-cross { border: 2px dashed #5a7a5a; border-radius: 6px; padding: 6px 10px; cursor: pointer; opacity: 0.85; }
+    .tree-node-cross:hover { opacity: 1; background: #252a25; }
+    .tree-cross-label { font-size: 0.7rem; color: #8fcf8f; margin-bottom: 4px; }
+    #toast { position:fixed; bottom:32px; left:50%; transform:translateX(-50%); background:#2a2a2a; color:#e0e0e0; padding:10px 20px; border-radius:6px; font-size:0.85rem; pointer-events:none; opacity:0; transition:opacity 0.2s; z-index:9999; border:1px solid #444; }
+    #toast.visible { opacity:1; }
+    #toast.error { color:#ef8080; border-color:#7a3a3a; }
+    #toast.success { color:#8fcf8f; border-color:#3a7a3a; }
   </style>
 </head>
 <body>
+  <div id="toast"></div>
   <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
     <h1 style="margin:0">Image Manager</h1>
     <div style="display:flex;gap:8px;align-items:center;">
+      <button id="sidebar-expand-btn" onclick="toggleSidebar()" title="Expand sidebar">›</button>
       <button id="import-drawer-btn" onclick="openDrawer()">Import Folder</button>
+      <button id="flat-btn" onclick="toggleFlatMode()"
+        style="background:#444;border:none;color:#ddd;padding:6px 14px;border-radius:5px;cursor:pointer;font-size:0.85rem">
+        Flat
+      </button>
       <button id="filmstrip-btn" onclick="toggleFilmstripMode()"
         style="background:#444;border:none;color:#ddd;padding:6px 14px;border-radius:5px;cursor:pointer;font-size:0.85rem">
         Filmstrip
@@ -126,7 +332,11 @@
         style="background:#444;border:none;color:#ddd;padding:6px 14px;border-radius:5px;cursor:pointer;font-size:0.85rem">
         Cluster
       </button>
-      <button id="link-btn" onclick="toggleLinkMode()"
+      <button id="order-btn" onclick="toggleOrderMode()"
+        style="background:#444;border:none;color:#ddd;padding:6px 14px;border-radius:5px;cursor:pointer;font-size:0.85rem">
+        Order
+      </button>
+      <button id="link-btn" onclick="enterPickParentPhase()"
         style="background:#444;border:none;color:#ddd;padding:6px 14px;border-radius:5px;cursor:pointer;font-size:0.85rem">
         Link
       </button>
@@ -134,6 +344,7 @@
         style="background:#444;border:none;color:#ddd;padding:6px 14px;border-radius:5px;cursor:pointer;font-size:0.85rem">
         Rebuild Index
       </button>
+      <button id="settings-btn" onclick="openSettings()" title="Settings">⚙</button>
     </div>
   </div>
 
@@ -143,24 +354,47 @@
     Drop images here to import
   </div>
 
-  <div id="cluster-progress">
-    <progress id="cluster-bar" value="0" max="100"></progress>
-    <div id="cluster-backend-label"></div>
+  <div id="page-body">
+    <div id="sidebar">
+      <div id="sidebar-header">
+        <span>Folders</span>
+        <button id="sidebar-collapse-btn" onclick="toggleSidebar()" title="Collapse sidebar">‹</button>
+      </div>
+      <div id="sidebar-tree"></div>
+    </div>
+    <div id="main-area">
+      <div id="cluster-progress">
+        <progress id="cluster-bar" value="0" max="100"></progress>
+        <div id="cluster-backend-label"></div>
+      </div>
+      <div id="content"><div class="empty">Loading...</div></div>
+    </div>
   </div>
-  <div id="content"><div class="empty">Loading...</div></div>
 
   <!-- Lightbox -->
   <div id="lightbox" onclick="if(event.target===this)closeLightbox()">
-    <img id="lightbox-img" src="" alt="">
-    <div id="lightbox-actions">
-      <button id="lb-send">Send to Comfy</button>
-      <button id="lb-lineage">View Lineage</button>
-      <button onclick="closeLightbox()">Close</button>
+    <div id="lb-inner">
+      <div id="lb-image-area">
+        <img id="lightbox-img" src="" alt="">
+      </div>
+      <div id="lb-panel">
+        <div id="lb-panel-content"></div>
+        <div id="lb-panel-footer">
+          <div class="lb-footer-row">
+            <button id="lb-lineage">View Lineage</button>
+            <button id="lb-fork">Fork…</button>
+          </div>
+          <div class="lb-footer-row">
+            <button id="lb-send">Send to Comfy</button>
+            <button onclick="closeLightbox()">Close</button>
+          </div>
+        </div>
+      </div>
     </div>
   </div>
 
   <!-- Tree panel -->
-  <div id="tree-overlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.7);z-index:100;overflow:auto;padding:24px;">
+  <div id="tree-overlay" onclick="if(event.target===this)closeTree()" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.7);z-index:100;overflow:auto;padding:24px;">
     <div style="max-width:900px;margin:0 auto;background:#2a2a2a;border-radius:10px;padding:24px;">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
         <h2 id="tree-title" style="font-size:1.1rem"></h2>
@@ -170,11 +404,116 @@
     </div>
   </div>
 
-  <!-- Link confirm bar -->
-  <div id="link-confirm-bar">
-    <span id="link-confirm-msg">Select parent image</span>
-    <button id="link-confirm-ok" onclick="commitLink()" style="display:none">Set as Parent</button>
-    <button id="link-confirm-cancel" onclick="cancelLinkMode()">Cancel</button>
+  <!-- Fork dialog -->
+  <div id="fork-dialog" onclick="if(event.target===this)closeForkDialog()">
+    <div id="fork-dialog-inner">
+      <h3>Fork to New Folder</h3>
+      <input id="fork-folder-input" type="text" placeholder="New folder name" autocomplete="off"
+        onkeydown="if(event.key==='Enter')submitFork();if(event.key==='Escape')closeForkDialog()">
+      <div id="fork-dialog-error"></div>
+      <div id="fork-dialog-btns">
+        <button id="fork-ok-btn" onclick="submitFork()">Fork</button>
+        <button id="fork-cancel-btn" onclick="closeForkDialog()">Cancel</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Delete folder confirmation dialog -->
+  <div id="delete-folder-dialog" onclick="if(event.target===this)closeDeleteFolderDialog()">
+    <div id="delete-folder-dialog-inner">
+      <h3 style="margin:0 0 12px;font-size:1rem;color:#e0e0e0;">Delete Folder</h3>
+      <p id="delete-folder-msg" style="margin:0 0 16px;color:#aaa;font-size:0.85rem;"></p>
+      <div style="display:flex;gap:8px;justify-content:flex-end;">
+        <button onclick="confirmDeleteFolder()"
+          style="background:#8a3a3a;color:#efbfbf;border:none;padding:6px 16px;border-radius:5px;cursor:pointer;font-weight:600;">
+          Delete
+        </button>
+        <button onclick="closeDeleteFolderDialog()"
+          style="background:#444;color:#aaa;border:none;padding:6px 16px;border-radius:5px;cursor:pointer;">
+          Cancel
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Selection bar (always-on; visible when ≥1 card selected) -->
+  <div id="selection-bar">
+    <span id="selection-count">0 selected</span>
+    <button id="selection-link-btn" onclick="enterPickParentPhase()">Link</button>
+    <button id="selection-fork-btn">Fork</button>
+    <button id="selection-delete-btn">Delete</button>
+    <span id="pick-parent-message" style="display:none">Click a parent image — Esc to cancel</span>
+    <button id="pick-parent-cancel-btn" style="display:none" onclick="cancelPickParentPhase()">Cancel</button>
+    <span id="pick-parent-confirm" style="display:none">
+      <span id="pick-parent-confirm-msg"></span>
+      <button id="pick-parent-confirm-yes">Reassign</button>
+      <button id="pick-parent-confirm-no" onclick="cancelPickParentConfirm()">Cancel</button>
+    </span>
+  </div>
+
+  <!-- Move-to-folder dialog -->
+  <div id="move-dialog-backdrop" onclick="if(event.target===this)closeMoveDialog()">
+    <div id="move-dialog">
+      <h3>Move to folder</h3>
+      <input id="move-folder-input" type="text" placeholder="New or existing folder name…" oninput="filterFolderOptions(this.value)">
+      <div id="move-folder-list"></div>
+      <div id="move-dialog-actions">
+        <button id="move-dialog-cancel" onclick="closeMoveDialog()">Cancel</button>
+        <button id="move-dialog-confirm" onclick="confirmMove()">Move</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Context menu -->
+  <div id="context-menu" style="display:none;position:fixed;z-index:8000;background:#2a2a2a;border:1px solid #555;border-radius:6px;padding:4px 0;min-width:160px;box-shadow:0 4px 16px rgba(0,0,0,0.5)">
+    <div class="ctx-item" onclick="_ctxOpen()">Open</div>
+    <div class="ctx-item" onclick="_ctxLink()">Link selected to…</div>
+    <div class="ctx-item" onclick="_ctxSendToComfy()">Send to Comfy</div>
+    <div class="ctx-item" onclick="_ctxFork()">Fork chain</div>
+    <div class="ctx-separator"></div>
+    <div class="ctx-item ctx-item-danger" onclick="_ctxDelete()">Delete</div>
+    <div class="ctx-item" onclick="_ctxCopyUUID()">Copy UUID</div>
+  </div>
+
+  <!-- Drawer backdrop -->
+  <div id="drawer-backdrop" onclick="closeSettings(); closeDrawer();"></div>
+
+  <!-- Settings Drawer -->
+  <div id="settings-drawer">
+    <div id="settings-drawer-header">
+      <h3>Settings</h3>
+      <button onclick="closeSettings()">✕</button>
+    </div>
+    <div id="settings-drawer-body">
+      <div>
+        <div class="settings-section-title">Clustering</div>
+        <div class="settings-row">
+          <label>
+            Granularity
+            <span id="settings-k-scale-readout">1.0×</span>
+          </label>
+          <input type="range" id="settings-k-scale" min="0" max="100" step="1" value="50"
+            oninput="onKScaleInput(this.value)">
+          <div class="settings-range-labels">
+            <span>0.1×</span><span>10×</span>
+          </div>
+          <div class="settings-hint">Lower = fewer, broader groups · Higher = more, tighter groups</div>
+        </div>
+      </div>
+      <div>
+        <div class="settings-section-title">Linking</div>
+        <div class="settings-row">
+          <label style="flex-direction:row;align-items:center;gap:8px;cursor:pointer;">
+            <input type="checkbox" id="settings-enforce-chronological"
+                   onchange="onEnforceChronologicalChange(this.checked)">
+            Enforce chronological order
+          </label>
+          <div class="settings-hint">
+            Block linking a parent that was created after the child.
+          </div>
+        </div>
+      </div>
+    </div>
   </div>
 
   <!-- Import Drawer -->
@@ -200,37 +539,86 @@
   </div>
 
   <script>
-    function sendToComfy(uuid) {
+    let _toastTimer = null;
+    function showToast(msg, isError = false) {
+      const t = document.getElementById('toast');
+      t.textContent = msg;
+      t.classList.toggle('error', isError);
+      t.classList.toggle('success', !isError);
+      t.classList.add('visible');
+      if (_toastTimer) clearTimeout(_toastTimer);
+      _toastTimer = setTimeout(() => t.classList.remove('visible'), 2500);
+    }
+
+    function sendToComfy(uuid, btn) {
+      if (!(window.parent && window.parent !== window)) {
+        showToast('Open Image Manager inside ComfyUI to use this feature.', true);
+        return;
+      }
+      if (btn) { btn.disabled = true; btn.textContent = 'Sending…'; }
       fetch(`/image-manager/api/workflow/${uuid}`)
-        .then(r => r.json())
+        .then(r => { if (!r.ok) throw new Error('fetch failed'); return r.json(); })
         .then(workflow => {
-          if (window.parent && window.parent !== window) {
-            window.parent.postMessage({type: 'loadWorkflow', workflow}, '*');
-          } else {
-            alert('Send to Comfy only works when embedded in ComfyUI.');
-          }
+          window.parent.postMessage({type: 'loadWorkflow', workflow}, '*');
+          showToast('Loaded in ComfyUI ✓');
+        })
+        .catch(() => {
+          showToast('Failed to load workflow', true);
+        })
+        .finally(() => {
+          if (btn) { btn.disabled = false; btn.textContent = 'Send to Comfy'; }
         });
     }
 
     function renderTreeNode(node, depth = 0) {
       const indent = depth * 20;
+      const gen = node.generation !== undefined ? node.generation : depth;
+
+      if (node.cross_chain) {
+        return `
+          <div style="margin-left:${indent}px;margin-bottom:12px;" class="tree-node-cross"
+               onclick="openTree('${node.uuid}','${escHtml(node.root_name)}')">
+            <div class="tree-cross-label">→ ${escHtml(node.root_name)}</div>
+            <div style="display:flex;align-items:center;gap:12px;">
+              <img src="/image-manager/api/image/${node.uuid}" style="width:48px;height:48px;object-fit:cover;border-radius:4px;background:#333;">
+              <div>
+                <div style="font-size:0.7rem;color:#666;margin-bottom:2px">Gen ${gen} · forked</div>
+                <div style="font-size:0.85rem">${node.filename.split('/').pop()}</div>
+                <div style="font-size:0.72rem;color:#888">click to view chain</div>
+              </div>
+            </div>
+          </div>
+        `;
+      }
+
       return `
         <div style="margin-left:${indent}px;margin-bottom:12px;display:flex;align-items:center;gap:12px;">
           <img src="/image-manager/api/image/${node.uuid}" style="width:64px;height:64px;object-fit:cover;border-radius:4px;background:#333;">
           <div>
+            <div style="font-size:0.7rem;color:#666;margin-bottom:2px">Gen ${gen}</div>
             <div style="font-size:0.85rem">${node.filename.split('/').pop()}</div>
             <div style="font-size:0.75rem;color:#888">${node.created_at.slice(0,10)}</div>
-            <button onclick="sendToComfy('${node.uuid}')"
-              style="margin-top:4px;font-size:0.75rem;background:#444;border:none;color:#ddd;padding:2px 8px;border-radius:3px;cursor:pointer">
-              Send to Comfy
-            </button>
+            <div style="display:flex;gap:6px;margin-top:4px;">
+              <button onclick="sendToComfy('${node.uuid}',this)"
+                style="font-size:0.75rem;background:#444;border:none;color:#ddd;padding:2px 8px;border-radius:3px;cursor:pointer">
+                Send to Comfy
+              </button>
+              <button onclick="openForkDialog('${node.uuid}')"
+                style="font-size:0.75rem;background:#2a3a4a;border:none;color:#8fc0ef;padding:2px 8px;border-radius:3px;cursor:pointer">
+                Fork…
+              </button>
+            </div>
           </div>
         </div>
         ${(node.children || []).map(c => renderTreeNode(c, depth + 1)).join('')}
       `;
     }
 
+    let _currentTreeRootUuid = null, _currentTreeRootName = null;
+
     async function openTree(rootUuid, rootName) {
+      _currentTreeRootUuid = rootUuid;
+      _currentTreeRootName = rootName;
       document.getElementById('tree-title').textContent = rootName;
       document.getElementById('tree-content').innerHTML = 'Loading...';
       document.getElementById('tree-overlay').style.display = 'block';
@@ -238,56 +626,302 @@
       document.getElementById('tree-content').innerHTML = renderTreeNode(data);
     }
 
-    function closeTree() { document.getElementById('tree-overlay').style.display = 'none'; }
+    function closeTree() {
+      document.getElementById('tree-overlay').style.display = 'none';
+      _currentTreeRootUuid = null;
+      _currentTreeRootName = null;
+    }
 
     let _lbUuid = null, _lbName = null;
 
-    function openLightbox(uuid, name, rootUuid) {
+    function escHtml(s) {
+      if (s === null || s === undefined) return '—';
+      return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+    }
+
+    function renderMetadataPanel(meta) {
+      const row = (label, val) =>
+        `<div class="lb-row"><span class="lb-label">${label}</span><span class="lb-val">${escHtml(val)}</span></div>`;
+
+      const date = meta.created_at ? meta.created_at.slice(0,10) : null;
+      const file = meta.filename ? meta.filename.split('/').pop() : null;
+
+      let html = `<div class="lb-section">
+        <div class="lb-section-title">Lineage</div>
+        ${row('Root', meta.root_name)}
+        ${row('Gen', meta.generation)}
+        ${row('Date', date)}
+        ${row('File', file)}
+      </div>`;
+
+      if (!meta.has_workflow) {
+        html += `<div class="lb-section">
+          <div class="lb-section-title">Generation Params</div>
+          <div class="lb-no-workflow">No workflow data</div>
+        </div>`;
+        return html;
+      }
+
+      const dims = (meta.width && meta.height) ? `${meta.width} × ${meta.height}` : null;
+      html += `<div class="lb-section">
+        <div class="lb-section-title">Generation Params</div>
+        ${row('Checkpoint', meta.checkpoint)}
+        ${dims ? row('Size', dims) : ''}
+        ${row('Steps', meta.steps)}
+        ${row('CFG', meta.cfg)}
+        ${row('Sampler', meta.sampler)}
+        ${row('Scheduler', meta.scheduler)}
+        ${row('Seed', meta.seed)}
+        ${row('Denoise', meta.denoise)}
+      </div>`;
+
+      if (meta.positive_prompt) {
+        html += `<div class="lb-prompt-block">
+          <span class="lb-label">Positive</span>
+          <div class="lb-prompt">${escHtml(meta.positive_prompt)}</div>
+        </div>`;
+      }
+      if (meta.negative_prompt) {
+        html += `<div class="lb-prompt-block">
+          <span class="lb-label">Negative</span>
+          <div class="lb-prompt">${escHtml(meta.negative_prompt)}</div>
+        </div>`;
+      }
+      if (meta.loras && meta.loras.length > 0) {
+        html += `<div class="lb-prompt-block">
+          <span class="lb-label">LoRAs</span>
+          <div class="lb-loras">${meta.loras.map(l => `<div>${escHtml(l.name)} @ ${escHtml(l.strength)}</div>`).join('')}</div>
+        </div>`;
+      }
+
+      return html;
+    }
+
+    async function openLightbox(uuid, name, rootUuid) {
       _lbUuid = uuid; _lbName = name;
       document.getElementById('lightbox-img').src = `/image-manager/api/image/${uuid}`;
-      document.getElementById('lb-send').onclick = () => sendToComfy(uuid);
+      document.getElementById('lb-send').onclick = (e) => sendToComfy(uuid, e.currentTarget);
       const lineageRoot = rootUuid || uuid;
       document.getElementById('lb-lineage').onclick = () => { closeLightbox(); openTree(lineageRoot, name); };
+      document.getElementById('lb-fork').onclick = () => openForkDialog(uuid);
+      document.getElementById('lb-panel-content').innerHTML =
+        '<div style="color:#666;font-size:0.82rem;padding:8px 0">Loading…</div>';
       document.getElementById('lightbox').classList.add('open');
+
+      try {
+        const resp = await fetch(`/image-manager/api/metadata/${uuid}`);
+        if (!resp.ok) throw new Error('fetch failed');
+        const meta = await resp.json();
+        document.getElementById('lb-panel-content').innerHTML = renderMetadataPanel(meta);
+      } catch (_) {
+        document.getElementById('lb-panel-content').innerHTML =
+          '<div class="lb-no-workflow">Could not load metadata.</div>';
+      }
     }
 
     function closeLightbox() {
       document.getElementById('lightbox').classList.remove('open');
       document.getElementById('lightbox-img').src = '';
+      document.getElementById('lb-panel-content').innerHTML = '';
+    }
+
+    // ── Fork dialog ───────────────────────────────────────────────────
+
+    let _forkUuid = null;
+
+    function openForkDialog(uuid) {
+      _forkUuid = uuid;
+      document.getElementById('fork-folder-input').value = '';
+      document.getElementById('fork-dialog-error').textContent = '';
+      const btn = document.getElementById('fork-ok-btn');
+      btn.disabled = false;
+      btn.textContent = 'Fork';
+      document.getElementById('fork-dialog').classList.add('open');
+      setTimeout(() => document.getElementById('fork-folder-input').focus(), 50);
+    }
+
+    function closeForkDialog() {
+      document.getElementById('fork-dialog').classList.remove('open');
+      _forkUuid = null;
+    }
+
+    async function submitFork() {
+      const folderName = document.getElementById('fork-folder-input').value.trim();
+      if (!folderName) {
+        document.getElementById('fork-dialog-error').textContent = 'Folder name is required.';
+        return;
+      }
+      const btn = document.getElementById('fork-ok-btn');
+      btn.disabled = true;
+      btn.textContent = 'Forking…';
+      document.getElementById('fork-dialog-error').textContent = '';
+      try {
+        const resp = await fetch(`/image-manager/api/fork/${_forkUuid}`, {
+          method: 'POST',
+          headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify({root_name: folderName}),
+        });
+        if (!resp.ok) {
+          const text = await resp.text();
+          throw new Error(text || `Server error ${resp.status}`);
+        }
+        closeForkDialog();
+        closeLightbox();
+        if (_currentTreeRootUuid) {
+          openTree(_currentTreeRootUuid, _currentTreeRootName);
+        }
+        loadSidebar();
+        loadRoots();
+      } catch (e) {
+        document.getElementById('fork-dialog-error').textContent = e.message;
+        btn.disabled = false;
+        btn.textContent = 'Fork';
+      }
     }
 
     document.addEventListener('keydown', e => {
       if (document.activeElement && ['INPUT','TEXTAREA'].includes(document.activeElement.tagName)) return;
-      if (e.key === 'Escape') { closeLightbox(); closeTree(); closeDrawer(); cancelLinkMode(); }
+      if (e.key === 'Escape') {
+        if (document.getElementById('context-menu').style.display !== 'none') { _hideContextMenu(); return; }
+        if (_pickingParent) { cancelPickParentPhase(); return; }
+        closeLightbox(); closeTree(); closeDrawer(); closeSettings(); closeForkDialog(); closeMoveDialog(); clearSelection();
+      }
+      if (e.key === 'l' || e.key === 'L') { enterPickParentPhase(); }
     });
 
+    // ── Sidebar ──────────────────────────────────────────────────────
+
+    let _activeFilter = { rootName: null };
+    let _sidebarOpen = true;
+
+    function toggleSidebar() {
+      _sidebarOpen = !_sidebarOpen;
+      document.getElementById('sidebar').classList.toggle('collapsed', !_sidebarOpen);
+      document.getElementById('sidebar-expand-btn').classList.toggle('visible', !_sidebarOpen);
+    }
+
+    async function loadSidebar() {
+      const folders = await fetch('/image-manager/api/folders').then(r => r.json());
+      const tree = document.getElementById('sidebar-tree');
+      const allActive = !_activeFilter.rootName;
+      tree.innerHTML = `
+        <div class="sidebar-all${allActive ? ' active' : ''}" onclick="clearFilter()">All Images</div>
+        ${folders.map(f => `
+          <div class="sidebar-root-name${_activeFilter.rootName === f.root_name ? ' active' : ''}"
+            data-root-name="${f.root_name}"
+            onclick="selectRootNameFilter('${f.root_name}')">
+            <span class="sidebar-folder-label">${f.root_name}</span>
+            <div style="display:flex;align-items:center;gap:4px;">
+              <span class="sidebar-count">${f.count}</span>
+              <div class="sidebar-folder-actions" onclick="event.stopPropagation()">
+                <button title="Rename" onclick="startFolderRename('${f.root_name}')">✎</button>
+                <button title="Delete" onclick="openDeleteFolderDialog('${f.root_name}',${f.count})">✕</button>
+              </div>
+            </div>
+          </div>
+        `).join('')}
+      `;
+    }
+
+    let _deleteFolderTarget = null;
+
+    function openDeleteFolderDialog(rootName, count) {
+      _deleteFolderTarget = rootName;
+      document.getElementById('delete-folder-msg').textContent =
+        `Delete "${rootName}" and its ${count} image${count !== 1 ? 's' : ''}? This cannot be undone.`;
+      document.getElementById('delete-folder-dialog').classList.add('open');
+    }
+
+    function closeDeleteFolderDialog() {
+      _deleteFolderTarget = null;
+      document.getElementById('delete-folder-dialog').classList.remove('open');
+    }
+
+    async function confirmDeleteFolder() {
+      if (!_deleteFolderTarget) return;
+      const name = _deleteFolderTarget;
+      closeDeleteFolderDialog();
+      const resp = await fetch(`/image-manager/api/folders/${encodeURIComponent(name)}`, { method: 'DELETE' });
+      if (resp.ok) {
+        if (_activeFilter.rootName === name) clearFilter();
+        else { loadSidebar(); _dispatchView(); }
+      }
+    }
+
+    function startFolderRename(rootName) {
+      const row = document.querySelector(`.sidebar-root-name[data-root-name="${CSS.escape(rootName)}"]`);
+      if (!row) return;
+      const label = row.querySelector('.sidebar-folder-label');
+      label.style.display = 'none';
+      const input = document.createElement('input');
+      input.className = 'sidebar-rename-input';
+      input.value = rootName;
+      input.onclick = e => e.stopPropagation();
+      let errorEl = row.parentElement.querySelector('.sidebar-rename-error');
+      if (!errorEl) { errorEl = document.createElement('div'); errorEl.className = 'sidebar-rename-error'; }
+      row.after(errorEl);
+      input.onkeydown = async e => {
+        if (e.key === 'Escape') { loadSidebar(); return; }
+        if (e.key !== 'Enter') return;
+        const newName = input.value.trim();
+        if (!newName) { errorEl.textContent = 'Name cannot be empty.'; return; }
+        const resp = await fetch(`/image-manager/api/folders/${encodeURIComponent(rootName)}`,
+          { method: 'PATCH', headers: {'Content-Type':'application/json'}, body: JSON.stringify({name: newName}) });
+        if (resp.ok) {
+          if (_activeFilter.rootName === rootName) _activeFilter = { rootName: newName };
+          await loadSidebar();
+          await _dispatchView();
+        } else {
+          const body = await resp.text();
+          errorEl.textContent = resp.status === 409 ? 'A folder with that name already exists.' : body;
+        }
+      };
+      row.insertBefore(input, label);
+      input.focus();
+      input.select();
+    }
+
+    function selectRootNameFilter(rootName) {
+      _activeFilter = { rootName };
+      clearSelection();
+      loadSidebar();
+      _dispatchView();
+    }
+
+    function clearFilter() {
+      _activeFilter = { rootName: null };
+      clearSelection();
+      loadSidebar();
+      _dispatchView();
+    }
+
+    function _buildFilterParams() {
+      const p = new URLSearchParams();
+      if (_activeFilter.rootName) p.set('root_name', _activeFilter.rootName);
+      return p.toString() ? '?' + p.toString() : '';
+    }
+
     async function load() {
-      const resp = await fetch('/image-manager/api/roots');
+      const resp = await fetch('/image-manager/api/roots' + _buildFilterParams());
       const roots = await resp.json();
       if (roots.length === 0) {
-        document.getElementById('content').innerHTML = '<div class="empty">No images yet. Save some with ManagedSaveImage.</div>';
+        const msg = (_activeFilter.rootName)
+          ? 'No images in this folder.'
+          : 'No images yet. Save some with ManagedSaveImage.';
+        document.getElementById('content').innerHTML = `<div class="empty">${msg}</div>`;
         return;
       }
-      const byDate = {};
-      for (const img of roots) {
-        const date = img.created_at.slice(0, 10);
-        (byDate[date] = byDate[date] || []).push(img);
-      }
-      const html = Object.entries(byDate)
-        .sort(([a], [b]) => b.localeCompare(a))
-        .map(([date, imgs]) => `
-          <div class="date-group">
-            <div class="date-label">${date}</div>
-            <div class="grid">
-              ${imgs.map(img => `
-                <div class="card" data-uuid="${img.uuid}" data-name="${img.root_name}" data-has-parent="${img.parent_uuid ? '1' : ''}"
-                  onclick="if(!linkCardClick('${img.uuid}','${img.root_name}',${img.parent_uuid ? 'true' : 'false'},this))openLightbox('${img.latest_uuid}', '${img.root_name}', '${img.uuid}')">
-                  <img src="/image-manager/api/image/${img.latest_uuid}" loading="lazy" alt="${img.root_name}">
+      const cardHtml = img => {
+        _cardData[img.uuid] = {lbUuid: img.latest_uuid, name: img.root_name, lbRoot: img.uuid, hasParent: !!img.parent_uuid};
+        return `
+                <div class="card" data-uuid="${img.uuid}">
+                  <img src="/image-manager/api/image/${img.latest_uuid}" loading="lazy" alt="${escHtml(img.root_name)}">
                   <div class="card-body">
                     <div class="card-name">${img.root_name}</div>
+                    ${img.latest_filename ? `<div class="card-tip">${img.latest_filename}</div>` : ''}
                     ${img.descendant_count > 0 ? `<div style="font-size:0.75rem;color:#888">${img.descendant_count} refinement${img.descendant_count !== 1 ? 's' : ''}</div>` : ''}
                     <div style="display:flex;gap:6px;margin-top:4px;">
-                      <button onclick="event.stopPropagation();sendToComfy('${img.latest_uuid}')"
+                      <button onclick="event.stopPropagation();sendToComfy('${img.latest_uuid}',this)"
                         style="flex:1;font-size:0.75rem;background:#444;border:none;color:#ddd;padding:2px 8px;border-radius:3px;cursor:pointer">
                         Send to Comfy
                       </button>
@@ -297,18 +931,32 @@
                       </button>
                     </div>
                   </div>
-                </div>
-              `).join('')}
-            </div>
+                </div>`;
+      };
+
+      const byDate = {};
+      for (const img of roots) {
+        const date = img.created_at.slice(0, 10);
+        (byDate[date] = byDate[date] || []).push(img);
+      }
+      const html = Object.entries(byDate)
+        .sort(([a], [b]) => b.localeCompare(a))
+        .map(([date, imgs]) => {
+          imgs.sort((a, b) => b.created_at.localeCompare(a.created_at));
+          return `
+          <div class="date-group">
+            <div class="date-label">${date}</div>
+            <div class="grid">${imgs.map(cardHtml).join('')}</div>
           </div>
-        `).join('');
+          `;
+        }).join('');
       document.getElementById('content').innerHTML = html;
     }
 
     async function rebuildIndex() {
-      if (_clusterMode) exitClusterMode();
       await fetch('/image-manager/api/rebuild', {method: 'POST'});
-      _filmstripMode ? renderFilmstrip() : load();
+      loadSidebar();
+      _dispatchView();
     }
 
     const dz = document.getElementById('drop-zone');
@@ -323,98 +971,461 @@
         form.append('file', file);
         form.append('filename', file.name);
         await fetch('/image-manager/api/import', {method: 'POST', body: form});
+        _dispatchView();
       }
-      load();
     });
 
+    const _savedView = localStorage.getItem('imageManager.viewMode');
+    if (!_savedView || _savedView === 'grid') localStorage.setItem('imageManager.viewMode', 'flat');
+    let _filmstripMode = _savedView === 'filmstrip';
+    let _flatMode = _savedView !== 'filmstrip';
+    let _clusterMode = false;
+    let _orderMode = false;
+
+    async function _dispatchView() {
+      if (_clusterMode) await enterClusterMode();
+      else if (_orderMode) await renderOrderChecker();
+      else if (_filmstripMode) await renderFilmstrip();
+      else await enterFlatMode();
+    }
+
+    initSettingsDrawer();
+    loadSidebar();
     if (_filmstripMode) {
       document.getElementById('filmstrip-btn').classList.add('active');
       document.getElementById('filmstrip-btn').textContent = 'Filmstrip ✓';
       renderFilmstrip();
     } else {
-      load();
+      document.getElementById('flat-btn').classList.add('active');
+      document.getElementById('flat-btn').textContent = 'Flat ✓';
+      renderFlat();
     }
 
-    // ── Link mode ───────────────────────────────────────────────────
+    // ── Card data registry + event delegation ───────────────────────
 
-    let _linkMode = false;
-    let _linkChild = null;
-    let _linkParent = null;
+    let _cardData = {};
 
-    function toggleLinkMode() {
-      _linkMode ? cancelLinkMode() : enterLinkMode();
-    }
+    let _clickTimer = null;
+    let _clickTimerCard = null;
 
-    function enterLinkMode() {
-      _linkMode = true;
-      _linkChild = null;
-      _linkParent = null;
-      document.getElementById('link-btn').classList.add('active');
-      document.getElementById('link-btn').textContent = 'Linking…';
-      document.getElementById('link-confirm-bar').classList.add('open');
-      document.getElementById('link-confirm-msg').textContent = 'Click an image to select it as child';
-      document.getElementById('link-confirm-ok').style.display = 'none';
-      document.querySelectorAll('.card').forEach(c => c.classList.add('link-selectable'));
-    }
+    document.getElementById('content').addEventListener('click', function(e) {
+      if (e.target.closest('button')) return;
+      const card = e.target.closest(_SELECTABLE);
+      if (!card) { clearSelection(); return; }
+      const uuid = card.dataset.uuid;
+      if (!_cardData[uuid]) return;
 
-    function cancelLinkMode() {
-      _linkMode = false;
-      _linkChild = null;
-      _linkParent = null;
-      document.getElementById('link-btn').classList.remove('active');
-      document.getElementById('link-btn').textContent = 'Link';
-      document.getElementById('link-confirm-bar').classList.remove('open');
-      document.querySelectorAll('.card').forEach(c => {
-        c.classList.remove('link-selectable', 'link-selected-child', 'link-selected-parent');
-      });
-    }
-
-    function linkCardClick(uuid, name, hasParent, cardEl) {
-      if (!_linkMode) return false;
-      if (!_linkChild) {
-        _linkChild = {uuid, name, hasParent};
-        cardEl.classList.remove('link-selectable');
-        cardEl.classList.add('link-selected-child');
-        const msg = hasParent
-          ? `"${name}" selected as child (already has a parent — will reassign). Now click the new parent.`
-          : `"${name}" selected as child. Now click the new parent.`;
-        document.getElementById('link-confirm-msg').textContent = msg;
-      } else if (!_linkParent && uuid !== _linkChild.uuid) {
-        _linkParent = {uuid, name};
-        cardEl.classList.remove('link-selectable');
-        cardEl.classList.add('link-selected-parent');
-        document.getElementById('link-confirm-msg').textContent =
-          `Link "${_linkChild.name}" → "${_linkParent.name}"?`;
-        document.getElementById('link-confirm-ok').style.display = 'inline-block';
-      }
-      return true;
-    }
-
-    async function commitLink() {
-      if (!_linkChild || !_linkParent) return;
-      const btn = document.getElementById('link-confirm-ok');
-      btn.disabled = true;
-      btn.textContent = 'Saving…';
-      try {
-        const resp = await fetch('/image-manager/api/set-parent', {
-          method: 'POST',
-          headers: {'Content-Type': 'application/json'},
-          body: JSON.stringify({child_uuid: _linkChild.uuid, parent_uuid: _linkParent.uuid}),
-        });
-        if (!resp.ok) {
-          const text = await resp.text();
-          alert(`Failed: ${text}`);
+      if (_pickingParent && !_selectedUUIDs.has(uuid)) {
+        if (_selectedUUIDs.size === 0) {
+          // No children selected yet — add this as first child
+          _selectedUUIDs.add(uuid);
+          card.classList.add('card-selected');
+          _selectionAnchor = uuid;
+          _updateSelectionBar();
+        } else {
+          _commitPickParent(uuid);
         }
-      } catch (e) {
-        alert(`Error: ${e}`);
+        return;
       }
-      cancelLinkMode();
-      load();
+
+      if (e.shiftKey) {
+        // Flush any pending plain-click so the anchor is set before range-selecting
+        if (_clickTimer && _clickTimerCard) {
+          clearTimeout(_clickTimer);
+          const pc = _clickTimerCard; _clickTimer = null; _clickTimerCard = null;
+          const pu = pc.dataset.uuid;
+          clearSelection();
+          _selectedUUIDs.add(pu); pc.classList.add('card-selected'); _selectionAnchor = pu; _updateSelectionBar();
+        }
+        _rangeSelect(uuid);
+        return;
+      }
+
+      if (e.ctrlKey || e.metaKey) {
+        _toggleCardSelection(uuid, card);
+        _selectionAnchor = uuid;
+        return;
+      }
+
+      // Plain click: 200ms timer to distinguish from dblclick; replaces selection
+      if (_clickTimerCard === card) clearTimeout(_clickTimer);
+      _clickTimerCard = card;
+      _clickTimer = setTimeout(() => {
+        _clickTimer = null; _clickTimerCard = null;
+        clearSelection();
+        _selectedUUIDs.add(uuid);
+        card.classList.add('card-selected');
+        _selectionAnchor = uuid;
+        _updateSelectionBar();
+      }, 200);
+    });
+
+    document.getElementById('content').addEventListener('dblclick', function(e) {
+      if (e.target.closest('button')) return;
+      const card = e.target.closest(_SELECTABLE);
+      if (!card) return;
+      const uuid = card.dataset.uuid;
+      const d = _cardData[uuid];
+      if (!d) return;
+      if (_clickTimerCard === card) { clearTimeout(_clickTimer); _clickTimer = null; _clickTimerCard = null; }
+      openLightbox(d.lbUuid, d.name, d.lbRoot);
+    });
+
+    // ── Always-on selection ──────────────────────────────────────────
+
+    const _SELECTABLE = '.card[data-uuid], .filmstrip-thumb[data-uuid]';
+
+    let _selectedUUIDs = new Set();
+    let _selectionAnchor = null;
+    let _pickingParent = false;
+    let _pendingParentUuid = null;
+
+    function clearSelection() {
+      _selectedUUIDs.clear();
+      _selectionAnchor = null;
+      document.querySelectorAll('.card.card-selected, .filmstrip-thumb.card-selected').forEach(c => c.classList.remove('card-selected'));
+      _updateSelectionBar();
+    }
+
+    function _updateSelectionBar() {
+      const bar = document.getElementById('selection-bar');
+      const n = _selectedUUIDs.size;
+      if (_pickingParent) {
+        bar.classList.add('open'); // always visible in pick-parent phase
+        document.getElementById('selection-count').style.display = 'none';
+        document.getElementById('selection-link-btn').style.display = 'none';
+        document.getElementById('selection-fork-btn').style.display = 'none';
+        document.getElementById('selection-delete-btn').style.display = 'none';
+        document.getElementById('pick-parent-message').style.display = '';
+        document.getElementById('pick-parent-cancel-btn').style.display = '';
+      } else {
+        document.getElementById('selection-count').style.display = '';
+        document.getElementById('selection-link-btn').style.display = '';
+        document.getElementById('selection-fork-btn').style.display = '';
+        document.getElementById('selection-delete-btn').style.display = '';
+        document.getElementById('pick-parent-message').style.display = 'none';
+        document.getElementById('pick-parent-cancel-btn').style.display = 'none';
+        document.getElementById('pick-parent-confirm').style.display = 'none';
+        document.getElementById('selection-count').textContent = `${n} selected`;
+        bar.classList.toggle('open', n > 0);
+      }
+    }
+
+    function enterPickParentPhase() {
+      _pickingParent = true;
+      document.body.classList.add('picking-parent');
+      if (_selectedUUIDs.size === 0) showToast('Select a child image', false);
+      _updateSelectionBar();
+    }
+
+    function cancelPickParentPhase() {
+      _pickingParent = false;
+      _pendingParentUuid = null;
+      document.body.classList.remove('picking-parent');
+      _updateSelectionBar();
+    }
+
+    function cancelPickParentConfirm() {
+      _pendingParentUuid = null;
+      document.getElementById('pick-parent-confirm').style.display = 'none';
+      document.getElementById('pick-parent-message').style.display = '';
+      document.getElementById('pick-parent-cancel-btn').style.display = '';
+    }
+
+    async function _doSetParentsBatch(parentUuid) {
+      const pairs = [..._selectedUUIDs].map(u => ({child_uuid: u, parent_uuid: parentUuid}));
+      const resp = await fetch('/image-manager/api/set-parents-batch', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({pairs}),
+      });
+      const data = await resp.json();
+      cancelPickParentPhase();
+      clearSelection();
+      if (data.errors && data.errors.length > 0) {
+        showToast(`Linked ${data.results.length} image(s); ${data.errors.length} failed`, true);
+      } else {
+        showToast(`Linked ${data.results.length} image(s)`, false);
+      }
+      _dispatchView();
+    }
+
+    async function _commitPickParent(parentUuid) {
+      const haveParent = [..._selectedUUIDs].filter(u => _cardData[u]?.hasParent);
+      if (haveParent.length > 0) {
+        _pendingParentUuid = parentUuid;
+        document.getElementById('pick-parent-confirm-msg').textContent =
+          `${haveParent.length} image${haveParent.length !== 1 ? 's' : ''} already have parents — reassign?`;
+        document.getElementById('pick-parent-confirm-yes').onclick = () => {
+          document.getElementById('pick-parent-confirm').style.display = 'none';
+          _doSetParentsBatch(_pendingParentUuid);
+        };
+        document.getElementById('pick-parent-confirm').style.display = '';
+        document.getElementById('pick-parent-message').style.display = 'none';
+        document.getElementById('pick-parent-cancel-btn').style.display = 'none';
+      } else {
+        await _doSetParentsBatch(parentUuid);
+      }
+    }
+
+    // ── Context menu ─────────────────────────────────────────────────
+
+    let _ctxUuid = null;
+
+    function _showContextMenu(x, y, uuid) {
+      _ctxUuid = uuid;
+      const menu = document.getElementById('context-menu');
+      menu.style.display = 'block';
+      // Position: keep within viewport
+      const vw = window.innerWidth, vh = window.innerHeight;
+      const mw = menu.offsetWidth || 160, mh = menu.offsetHeight || 200;
+      menu.style.left = (x + mw > vw ? vw - mw - 4 : x) + 'px';
+      menu.style.top  = (y + mh > vh ? vh - mh - 4 : y) + 'px';
+    }
+
+    function _hideContextMenu() {
+      document.getElementById('context-menu').style.display = 'none';
+      _ctxUuid = null;
+    }
+
+    document.getElementById('content').addEventListener('contextmenu', function(e) {
+      const card = e.target.closest(_SELECTABLE);
+      if (!card) return;
+      e.preventDefault();
+      const uuid = card.dataset.uuid;
+      if (!_selectedUUIDs.has(uuid)) {
+        clearSelection();
+        _selectedUUIDs.add(uuid);
+        card.classList.add('card-selected');
+        _selectionAnchor = uuid;
+        _updateSelectionBar();
+      }
+      _showContextMenu(e.clientX, e.clientY, uuid);
+    });
+
+    document.addEventListener('click', function(e) {
+      if (!e.target.closest('#context-menu')) _hideContextMenu();
+    });
+    document.addEventListener('scroll', _hideContextMenu, true);
+
+    function _ctxOpen() {
+      const d = _cardData[_ctxUuid];
+      if (d) openLightbox(d.lbUuid, d.name, d.lbRoot);
+      _hideContextMenu();
+    }
+
+    function _ctxLink() {
+      _hideContextMenu();
+      enterPickParentPhase();
+    }
+
+    function _ctxSendToComfy() {
+      const uuid = _ctxUuid;
+      _hideContextMenu();
+      sendToComfy(uuid, null);
+    }
+
+    function _ctxFork() {
+      const uuid = _ctxUuid;
+      _hideContextMenu();
+      openForkDialog(uuid);
+    }
+
+    async function _ctxDelete() {
+      const uuids = [..._selectedUUIDs];
+      const n = uuids.length;
+      _hideContextMenu();
+      if (!confirm(`Delete ${n} image${n !== 1 ? 's' : ''}? This cannot be undone.`)) return;
+      const resp = await fetch('/image-manager/api/delete-images', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({uuids}),
+      });
+      if (!resp.ok) { showToast('Delete failed', true); return; }
+      const data = await resp.json();
+      clearSelection();
+      showToast(`Deleted ${data.deleted} image${data.deleted !== 1 ? 's' : ''}`, false);
+      await loadSidebar();
+      _dispatchView();
+    }
+
+    function _ctxCopyUUID() {
+      const uuid = _ctxUuid;
+      _hideContextMenu();
+      navigator.clipboard.writeText(uuid).then(() => showToast('UUID copied', false));
+    }
+
+    function _toggleCardSelection(uuid, cardEl) {
+      if (_selectedUUIDs.has(uuid)) {
+        _selectedUUIDs.delete(uuid);
+        cardEl.classList.remove('card-selected');
+      } else {
+        _selectedUUIDs.add(uuid);
+        cardEl.classList.add('card-selected');
+      }
+      _updateSelectionBar();
+    }
+
+    function _rangeSelect(targetUuid) {
+      const all = [...document.getElementById('content').querySelectorAll(_SELECTABLE)];
+      const anchorIdx = _selectionAnchor ? all.findIndex(el => el.dataset.uuid === _selectionAnchor) : -1;
+      const targetIdx = all.findIndex(el => el.dataset.uuid === targetUuid);
+      if (anchorIdx === -1 || targetIdx === -1) {
+        const el = all.find(el => el.dataset.uuid === targetUuid);
+        clearSelection();
+        if (el) { _selectedUUIDs.add(targetUuid); el.classList.add('card-selected'); _selectionAnchor = targetUuid; _updateSelectionBar(); }
+        return;
+      }
+      const lo = Math.min(anchorIdx, targetIdx);
+      const hi = Math.max(anchorIdx, targetIdx);
+      _selectedUUIDs.clear();
+      document.querySelectorAll('.card.card-selected, .filmstrip-thumb.card-selected').forEach(c => c.classList.remove('card-selected'));
+      for (let i = lo; i <= hi; i++) {
+        const el = all[i];
+        _selectedUUIDs.add(el.dataset.uuid);
+        el.classList.add('card-selected');
+      }
+      _updateSelectionBar();
+    }
+
+    async function openMoveDialog() {
+      if (_selectedUUIDs.size === 0) return;
+      document.getElementById('move-folder-input').value = '';
+      const resp = await fetch('/image-manager/api/folders');
+      const folders = await resp.json();
+      _renderFolderOptions(folders.map(f => f.root_name), '');
+      document.getElementById('move-dialog-backdrop').classList.add('open');
+      document.getElementById('move-folder-input').focus();
+    }
+
+    function closeMoveDialog() {
+      document.getElementById('move-dialog-backdrop').classList.remove('open');
+    }
+
+    function filterFolderOptions(query) {
+      fetch('/image-manager/api/folders')
+        .then(r => r.json())
+        .then(folders => _renderFolderOptions(folders.map(f => f.root_name), query));
+    }
+
+    function _renderFolderOptions(names, query) {
+      const list = document.getElementById('move-folder-list');
+      const filtered = query ? names.filter(n => n.toLowerCase().includes(query.toLowerCase())) : names;
+      list.innerHTML = filtered.map(n =>
+        `<div class="move-folder-option" onclick="document.getElementById('move-folder-input').value='${escHtml(n)}'">📁 ${escHtml(n)}</div>`
+      ).join('');
+    }
+
+    async function confirmMove() {
+      const target = document.getElementById('move-folder-input').value.trim();
+      if (!target) { showToast('Enter a folder name', 'error'); return; }
+      const root_uuids = [..._selectedUUIDs];
+      const resp = await fetch('/image-manager/api/move-chains', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({root_uuids, target_folder: target}),
+      });
+      if (!resp.ok) { showToast('Move failed', 'error'); return; }
+      closeMoveDialog();
+      clearSelection();
+      showToast(`Moved to "${target}"`, 'success');
+      await loadSidebar();
+      _dispatchView();
+    }
+
+    // ── Flat mode ────────────────────────────────────────────────────
+
+    function toggleFlatMode() {
+      if (!_filmstripMode && !_clusterMode) return;
+      enterFlatMode();
+    }
+
+    function exitFlatMode() {
+      // no-op: flat is the permanent base state
+    }
+
+    async function enterFlatMode() {
+      clearSelection();
+      if (_clusterMode) {
+        _clusterMode = false;
+        document.getElementById('cluster-btn').classList.remove('active');
+        document.getElementById('cluster-btn').textContent = 'Cluster';
+        document.getElementById('cluster-progress').style.display = 'none';
+      }
+      if (_orderMode) {
+        _orderMode = false;
+        document.getElementById('order-btn').classList.remove('active');
+        document.getElementById('order-btn').textContent = 'Order';
+      }
+      if (_filmstripMode) {
+        _filmstripMode = false;
+        document.getElementById('filmstrip-btn').classList.remove('active');
+        document.getElementById('filmstrip-btn').textContent = 'Filmstrip';
+      }
+      _flatMode = true;
+      localStorage.setItem('imageManager.viewMode', 'flat');
+      document.getElementById('flat-btn').classList.add('active');
+      document.getElementById('flat-btn').textContent = 'Flat ✓';
+      await renderFlat();
+    }
+
+    async function renderFlat() {
+      const resp = await fetch('/image-manager/api/all-images' + _buildFilterParams());
+      const images = await resp.json();
+      const content = document.getElementById('content');
+      if (images.length === 0) {
+        const msg = _activeFilter.rootName
+          ? 'No images in this folder.'
+          : 'No images yet. Save some with ManagedSaveImage.';
+        content.innerHTML = `<div class="empty">${msg}</div>`;
+        return;
+      }
+      const cardHtml = img => {
+        const stem = img.filename.split('/').pop().replace(/\.[^.]+$/, '');
+        _cardData[img.uuid] = {lbUuid: img.uuid, name: img.root_name, lbRoot: img.root_uuid, hasParent: !!img.parent_uuid, generation: img.generation, orphan: img.orphan};
+        const borderStyle = img.orphan ? '' : `border: 3px solid ${chainColor(img.root_uuid)};`;
+        const genBadge = img.orphan ? '' : `<span class="gen-badge">G${img.generation}</span>`;
+        return `
+          <div class="card" data-uuid="${img.uuid}" style="${borderStyle}">
+            <div style="position:relative">
+              <img src="/image-manager/api/image/${img.uuid}" loading="lazy" alt="${stem}">
+              ${genBadge}
+            </div>
+            <div class="card-body">
+              <div class="card-name">${stem}</div>
+              <div class="card-root-name" style="font-size:0.7rem;color:#888;margin-bottom:2px">${img.root_name}</div>
+              <div style="display:flex;gap:6px;margin-top:4px;">
+                <button onclick="event.stopPropagation();sendToComfy('${img.uuid}',this)"
+                  style="flex:1;font-size:0.75rem;background:#444;border:none;color:#ddd;padding:2px 8px;border-radius:3px;cursor:pointer">
+                  Send to Comfy
+                </button>
+                <button onclick="event.stopPropagation();openTree('${img.root_uuid}','${img.root_name}')"
+                  style="flex:1;font-size:0.75rem;background:#333;border:none;color:#aaa;padding:2px 8px;border-radius:3px;cursor:pointer">
+                  Lineage
+                </button>
+              </div>
+            </div>
+          </div>`;
+      };
+      const byDate = {};
+      for (const img of images) {
+        const date = img.created_at.slice(0, 10);
+        (byDate[date] = byDate[date] || []).push(img);
+      }
+      const html = Object.entries(byDate)
+        .sort(([a], [b]) => b.localeCompare(a))
+        .map(([date, imgs]) => `
+          <div class="date-group">
+            <div class="date-label collapsible" onclick="this.closest('.date-group').classList.toggle('collapsed')">
+              <span class="collapse-chevron">&#9660;</span>${date}
+            </div>
+            <div class="grid">${imgs.map(cardHtml).join('')}</div>
+          </div>
+        `).join('');
+      content.innerHTML = html;
     }
 
     // ── Filmstrip mode ───────────────────────────────────────────────
-
-    let _filmstripMode = localStorage.getItem('imageManager.viewMode') === 'filmstrip';
 
     function toggleFilmstripMode() {
       _filmstripMode ? exitFilmstripMode() : enterFilmstripMode();
@@ -422,14 +1433,19 @@
 
     function exitFilmstripMode() {
       _filmstripMode = false;
-      localStorage.setItem('imageManager.viewMode', 'grid');
       document.getElementById('filmstrip-btn').classList.remove('active');
       document.getElementById('filmstrip-btn').textContent = 'Filmstrip';
-      load();
+      _dispatchView();
     }
 
     async function enterFilmstripMode() {
+      clearSelection();
       if (_clusterMode) exitClusterMode();
+      if (_flatMode) {
+        _flatMode = false;
+        document.getElementById('flat-btn').classList.remove('active');
+        document.getElementById('flat-btn').textContent = 'Flat';
+      }
       _filmstripMode = true;
       localStorage.setItem('imageManager.viewMode', 'filmstrip');
       document.getElementById('filmstrip-btn').classList.add('active');
@@ -438,34 +1454,67 @@
     }
 
     async function renderFilmstrip() {
-      const resp = await fetch('/image-manager/api/chains');
-      const chains = await resp.json();
+      const resp = await fetch('/image-manager/api/leaf-strips' + _buildFilterParams());
+      const strips = await resp.json();
       const content = document.getElementById('content');
-      if (chains.length === 0) {
-        content.innerHTML = '<div class="empty">No images yet. Save some with ManagedSaveImage.</div>';
+      if (strips.length === 0) {
+        const msg = (_activeFilter.rootName)
+          ? 'No images in this folder.'
+          : 'No images yet. Save some with ManagedSaveImage.';
+        content.innerHTML = `<div class="empty">${msg}</div>`;
         return;
       }
-      content.innerHTML = chains.map(chain => `
-        <div class="filmstrip-row">
-          <div class="filmstrip-row-header">${chain.root_name} · ${chain.images.length} image${chain.images.length !== 1 ? 's' : ''}</div>
-          <div class="filmstrip-track">
-            ${chain.images.map((img, i) => `
-              <div class="filmstrip-thumb${i === 0 ? ' chain-tip' : ''}"
-                onclick="openLightbox('${img.uuid}', '${chain.root_name}', '${chain.root_uuid}')">
-                <img src="/image-manager/api/image/${img.uuid}" loading="lazy" alt="${chain.root_name}">
-              </div>
-            `).join('')}
+
+      const stemOf = name => name.replace(/\.[^.]+$/, '');
+      const renderStripRow = strip => {
+        const thumbHtml = strip.images.map((img, i) => {
+          _cardData[img.uuid] = {lbUuid: img.uuid, name: strip.root_name, lbRoot: strip.leaf_uuid, hasParent: false};
+          return `<div class="filmstrip-thumb${i === 0 ? ' chain-tip' : ''}" data-uuid="${img.uuid}">
+            <img src="/image-manager/api/image/${img.uuid}" loading="lazy" alt="${strip.root_name}">
+          </div>`;
+        }).join('');
+        return `
+          <div class="filmstrip-row">
+            <div class="filmstrip-row-header">${strip.root_name} / ${stemOf(strip.leaf_name)} – Gen ${strip.generation}</div>
+            <div class="filmstrip-track">${thumbHtml}</div>
           </div>
-        </div>
-      `).join('');
+        `;
+      };
+
+      const byDate = {};
+      for (const strip of strips) {
+        const date = strip.images[0].created_at.slice(0, 10);
+        (byDate[date] = byDate[date] || []).push(strip);
+      }
+      const html = Object.entries(byDate)
+        .sort(([a], [b]) => b.localeCompare(a))
+        .map(([date, dateStrips]) => `
+          <div class="date-group">
+            <div class="date-label">${date}</div>
+            ${dateStrips.map(renderStripRow).join('')}
+          </div>
+        `).join('');
+      content.innerHTML = html;
     }
 
     // ── Cluster mode ────────────────────────────────────────────────
 
-    let _clusterMode = false;
+    const _chainColorCache = new Map();
+    function chainColor(rootUuid) {
+      if (_chainColorCache.has(rootUuid)) return _chainColorCache.get(rootUuid);
+      let h = 0;
+      for (let i = 0; i < Math.min(6, rootUuid.length); i++) h = (h * 31 + rootUuid.charCodeAt(i)) & 0xffff;
+      const color = `hsl(${h % 360}, 65%, 55%)`;
+      _chainColorCache.set(rootUuid, color);
+      return color;
+    }
 
     function toggleClusterMode() {
       _clusterMode ? exitClusterMode() : enterClusterMode();
+    }
+
+    function toggleClusterGroup(i) {
+      document.getElementById('cluster-group-' + i).classList.toggle('collapsed');
     }
 
     function exitClusterMode() {
@@ -473,10 +1522,17 @@
       document.getElementById('cluster-btn').classList.remove('active');
       document.getElementById('cluster-btn').textContent = 'Cluster';
       document.getElementById('cluster-progress').style.display = 'none';
-      _filmstripMode ? renderFilmstrip() : load();
+      _dispatchView();
     }
 
     async function enterClusterMode() {
+      clearSelection();
+      if (_filmstripMode) exitFilmstripMode();
+      if (_flatMode) {
+        _flatMode = false;
+        document.getElementById('flat-btn').classList.remove('active');
+        document.getElementById('flat-btn').textContent = 'Flat';
+      }
       _clusterMode = true;
       const btn = document.getElementById('cluster-btn');
       btn.classList.add('active');
@@ -493,7 +1549,10 @@
       label.textContent = '';
 
       try {
-        const resp = await fetch('/image-manager/api/cluster', {method: 'POST'});
+        const kScale = parseFloat(localStorage.getItem('imageManager.clusterKScale') || '1');
+        const clusterParams = new URLSearchParams(_buildFilterParams().replace(/^\?/, ''));
+        clusterParams.set('k_scale', kScale.toFixed(4));
+        const resp = await fetch('/image-manager/api/cluster?' + clusterParams.toString(), {method: 'POST'});
         const reader = resp.body.getReader();
         const decoder = new TextDecoder();
         let buf = '';
@@ -527,39 +1586,44 @@
           return;
         }
 
-        // Fetch all root metadata to render cards
-        const roots = await fetch('/image-manager/api/roots').then(r => r.json());
-        const byUuid = Object.fromEntries(roots.map(r => [r.uuid, r]));
-
         const html = Object.entries(clusters)
           .sort(([a], [b]) => Number(a) - Number(b))
-          .map(([label_id, uuids], i) => {
-            const imgs = uuids.map(u => byUuid[u]).filter(Boolean);
-            return `
-              <div class="date-group">
-                <div class="date-label">Cluster ${i + 1} · ${imgs.length} image${imgs.length !== 1 ? 's' : ''}</div>
-                <div class="grid">
-                  ${imgs.map(img => `
-                    <div class="card" data-uuid="${img.uuid}" data-name="${img.root_name}"
-                      onclick="if(!linkCardClick('${img.uuid}','${img.root_name}',${img.parent_uuid ? 'true' : 'false'},this))openLightbox('${img.latest_uuid}', '${img.root_name}', '${img.uuid}')">
-                      <img src="/image-manager/api/image/${img.latest_uuid}" loading="lazy" alt="${img.root_name}">
-                      <div class="card-body">
-                        <div class="card-name">${img.root_name}</div>
-                        ${img.descendant_count > 0 ? `<div style="font-size:0.75rem;color:#888">${img.descendant_count} refinement${img.descendant_count !== 1 ? 's' : ''}</div>` : ''}
-                        <div style="display:flex;gap:6px;margin-top:4px;">
-                          <button onclick="event.stopPropagation();sendToComfy('${img.latest_uuid}')"
-                            style="flex:1;font-size:0.75rem;background:#444;border:none;color:#ddd;padding:2px 8px;border-radius:3px;cursor:pointer">
-                            Send to Comfy
-                          </button>
-                          <button onclick="event.stopPropagation();openTree('${img.uuid}','${img.root_name}')"
-                            style="flex:1;font-size:0.75rem;background:#333;border:none;color:#aaa;padding:2px 8px;border-radius:3px;cursor:pointer">
-                            Lineage
-                          </button>
-                        </div>
-                      </div>
+          .map(([label_id, items], i) => {
+            const cardHtml = items.map(item => {
+              const borderStyle = item.orphan
+                ? 'border: 3px dashed #888;'
+                : `border: 3px solid ${chainColor(item.root_uuid)};`;
+              const badge = item.orphan ? '' : `<span class="gen-badge">G${item.generation}</span>`;
+              const rootName = item.filename ? item.filename.split('/').slice(-2, -1)[0] || item.filename : '';
+              const shortName = item.filename ? item.filename.split('/').pop().replace(/\.[^.]+$/, '') : item.uuid.slice(0, 8);
+              _cardData[item.uuid] = {lbUuid: item.uuid, name: rootName, lbRoot: item.root_uuid, hasParent: !!item.parent_uuid};
+              return `
+                <div class="card" data-uuid="${item.uuid}" style="${borderStyle}">
+                  ${badge}
+                  <img src="/image-manager/api/image/${item.uuid}" loading="lazy" alt="${escHtml(rootName)}">
+                  <div class="card-body">
+                    <div class="card-name">${rootName}</div>
+                    <div class="card-tip">${shortName}</div>
+                    <div style="display:flex;gap:6px;margin-top:4px;">
+                      <button onclick="event.stopPropagation();sendToComfy('${item.uuid}',this)"
+                        style="flex:1;font-size:0.75rem;background:#444;border:none;color:#ddd;padding:2px 8px;border-radius:3px;cursor:pointer">
+                        Send to Comfy
+                      </button>
+                      <button onclick="event.stopPropagation();openTree('${item.root_uuid}','${rootName}')"
+                        style="flex:1;font-size:0.75rem;background:#333;border:none;color:#aaa;padding:2px 8px;border-radius:3px;cursor:pointer">
+                        Lineage
+                      </button>
                     </div>
-                  `).join('')}
+                  </div>
+                </div>`;
+            }).join('');
+            return `
+              <div class="date-group" id="cluster-group-${i}">
+                <div class="date-label collapsible" onclick="toggleClusterGroup(${i})">
+                  <span class="collapse-chevron">&#9660;</span>
+                  Cluster ${i + 1} &middot; ${items.length} image${items.length !== 1 ? 's' : ''}
                 </div>
+                <div class="grid">${cardHtml}</div>
               </div>
             `;
           }).join('');
@@ -573,10 +1637,166 @@
       }
     }
 
+    // ── Order Checker Mode ───────────────────────────────────────────
+
+    function toggleOrderMode() {
+      _orderMode ? exitOrderMode() : enterOrderMode();
+    }
+
+    function exitOrderMode() {
+      _orderMode = false;
+      document.getElementById('order-btn').classList.remove('active');
+      document.getElementById('order-btn').textContent = 'Order';
+      enterFlatMode();
+    }
+
+    function enterOrderMode() {
+      if (_clusterMode) exitClusterMode();
+      if (_filmstripMode) exitFilmstripMode();
+      if (_flatMode) {
+        _flatMode = false;
+        document.getElementById('flat-btn').classList.remove('active');
+        document.getElementById('flat-btn').textContent = 'Flat';
+      }
+      _orderMode = true;
+      const btn = document.getElementById('order-btn');
+      btn.classList.add('active');
+      btn.textContent = 'Order ✓';
+      renderOrderChecker();
+    }
+
+    const _skippedViolations = new Set();
+
+    async function renderOrderChecker() {
+      const content = document.getElementById('content');
+      const scrollY = window.scrollY;
+      content.innerHTML = '<div class="empty">Loading order violations…</div>';
+      let violations;
+      try {
+        const resp = await fetch('/image-manager/api/order-violations');
+        violations = await resp.json();
+      } catch (e) {
+        content.innerHTML = `<div class="empty">Failed to load violations: ${e}</div>`;
+        return;
+      }
+      const visible = violations.filter(v => !_skippedViolations.has(v.parent_uuid + ':' + v.child_uuid));
+      if (visible.length === 0) {
+        content.innerHTML = '<div class="empty">No order violations found — all parent→child links are in chronological order.</div>';
+        window.scrollTo(0, scrollY);
+        return;
+      }
+      content.innerHTML = visible.map(v => `
+        <div class="order-violation-card" id="ovc-${v.child_uuid}">
+          <div class="order-violation-pair">
+            <div class="order-violation-row">
+              <img class="order-violation-thumb" src="/image-manager/api/image/${v.parent_uuid}" alt="">
+              <div class="order-violation-info">
+                <div>${escHtml(v.parent_filename || v.parent_uuid.slice(0, 8))} <em style="color:#888">(parent)</em></div>
+                <div class="ts">${v.parent_created_at} ← newer · wrong direction</div>
+              </div>
+            </div>
+            <div class="order-violation-arrow">↓ assigned as parent of</div>
+            <div class="order-violation-row">
+              <img class="order-violation-thumb" src="/image-manager/api/image/${v.child_uuid}" alt="">
+              <div class="order-violation-info">
+                <div>${escHtml(v.child_filename || v.child_uuid.slice(0, 8))} <em style="color:#888">(child)</em></div>
+                <div class="ts">${v.child_created_at} ← older</div>
+              </div>
+            </div>
+          </div>
+          <div class="order-violation-suggestion">
+            Promote: <strong>${escHtml(v.suggested_filename || v.suggested_uuid.slice(0, 8))}</strong> becomes parent of all siblings
+          </div>
+          <div class="order-violation-actions">
+            <button class="order-swap-btn" onclick="promoteOrderViolation(${escHtml(JSON.stringify(v))})">Promote ↑</button>
+            <button class="order-skip-btn" onclick="skipOrderViolation('${v.parent_uuid}','${v.child_uuid}')">Skip</button>
+          </div>
+        </div>
+      `).join('');
+      window.scrollTo(0, scrollY);
+    }
+
+    async function promoteOrderViolation(v) {
+      try {
+        const scrollY = window.scrollY;
+        const resp = await fetch('/image-manager/api/promote-child', {
+          method: 'POST',
+          headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify({parent_uuid: v.parent_uuid, promoted_uuid: v.suggested_uuid}),
+        });
+        if (!resp.ok) {
+          const err = await resp.json().catch(() => ({}));
+          showToast(err.reason || 'Promote failed', 'error');
+          return;
+        }
+        await renderOrderChecker();
+        window.scrollTo(0, scrollY);
+      } catch (e) {
+        showToast('Promote failed: ' + e, 'error');
+      }
+    }
+
+    function skipOrderViolation(parentUuid, childUuid) {
+      _skippedViolations.add(parentUuid + ':' + childUuid);
+      document.getElementById('ovc-' + childUuid)?.remove();
+      const content = document.getElementById('content');
+      if (!content.querySelector('.order-violation-card')) {
+        content.innerHTML = '<div class="empty">No order violations found — all parent→child links are in chronological order.</div>';
+      }
+    }
+
+    // ── Settings Drawer ─────────────────────────────────────────────
+
+    function kScaleMultiplier(sliderVal) {
+      // log scale: slider 0→100 maps multiplier 0.1→10, with 1.0 at slider 50
+      return 0.1 * Math.pow(100, sliderVal / 100);
+    }
+
+    function onKScaleInput(val) {
+      const multiplier = kScaleMultiplier(Number(val));
+      const display = multiplier.toFixed(2) + '×';
+      document.getElementById('settings-k-scale-readout').textContent = display;
+      localStorage.setItem('imageManager.clusterKScale', String(multiplier));
+    }
+
+    function onEnforceChronologicalChange(checked) {
+      localStorage.setItem('imageManager.enforceChronological', String(checked));
+    }
+
+    function initSettingsDrawer() {
+      const stored = localStorage.getItem('imageManager.clusterKScale');
+      const multiplier = stored ? parseFloat(stored) : 1.0;
+      const sliderVal = stored
+        ? Math.round(100 * Math.log(multiplier / 0.1) / Math.log(100))
+        : 50;
+      const clampedVal = Math.max(0, Math.min(100, sliderVal));
+      document.getElementById('settings-k-scale').value = clampedVal;
+      document.getElementById('settings-k-scale-readout').textContent =
+        multiplier.toFixed(2) + '×';
+      if (!stored) localStorage.setItem('imageManager.clusterKScale', '1');
+      const enforceStored = localStorage.getItem('imageManager.enforceChronological');
+      document.getElementById('settings-enforce-chronological').checked = enforceStored === 'true';
+    }
+
+    function openSettings() {
+      document.getElementById('settings-drawer').classList.add('open');
+      document.getElementById('drawer-backdrop').classList.add('open');
+    }
+    function closeSettings() {
+      document.getElementById('settings-drawer').classList.remove('open');
+      document.getElementById('drawer-backdrop').classList.remove('open');
+    }
+
     // ── Import Drawer ───────────────────────────────────────────────
 
-    function openDrawer() { document.getElementById('import-drawer').classList.add('open'); }
-    function closeDrawer() { document.getElementById('import-drawer').classList.remove('open'); }
+    function openDrawer() {
+      document.getElementById('import-drawer').classList.add('open');
+      document.getElementById('drawer-backdrop').classList.add('open');
+    }
+    function closeDrawer() {
+      document.getElementById('import-drawer').classList.remove('open');
+      document.getElementById('drawer-backdrop').classList.remove('open');
+    }
 
     async function startImport() {
       const path = document.getElementById('import-drawer-path').value.trim();
@@ -625,7 +1845,7 @@
             }
           }
         }
-        load();
+        _dispatchView();
       } catch (e) {
         appendLine('', `Error: ${e}`);
       } finally {

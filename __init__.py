@@ -19,8 +19,15 @@ def _read_managed_root() -> Path:
             pass
     return _COMFYUI_ROOT / "managed_output"
 
-MANAGED_ROOT = _read_managed_root()
-MANAGED_ROOT.mkdir(parents=True, exist_ok=True)
+_configured_root = _read_managed_root()
+try:
+    _configured_root.mkdir(parents=True, exist_ok=True)
+    MANAGED_ROOT = _configured_root
+except Exception as _mkdir_err:
+    print(f"[image_manager] WARNING: could not create managed folder {_configured_root!r}: {_mkdir_err}")
+    print(f"[image_manager] WARNING: falling back to default managed_output folder")
+    MANAGED_ROOT = _COMFYUI_ROOT / "managed_output"
+    MANAGED_ROOT.mkdir(parents=True, exist_ok=True)
 
 DB_PATH = _PKG_DIR / "image_manager.db"
 

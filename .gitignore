@@ -6,4 +6,20 @@ __pycache__/
 *.db-shm
 *.db-wal
 
+CONTEXT.md
+CLAUDE.md
+
 pii_test.txt
+
+plans/
+TODO.md
+
+node_modules/
+package.json
+package-lock.json
+playwright.config.js
+tests/e2e/
+test-results/
+
+prd.json
+run_claude.log
