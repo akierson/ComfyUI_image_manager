@@ -9,8 +9,8 @@ import pytest
 import torch
 from PIL import Image as PilImage
 
-from lineage import save_image, init_db, scan_and_import, fork_chain, promote_child, swap_adjacent
-from api import make_app
+from lineage import save_image, init_db, scan_and_import, fork_chain, promote_child, swap_adjacent, import_from_input
+from api import make_app, _inject_parent_into_workflow
 
 
 @pytest.fixture
@@ -182,10 +182,14 @@ async def test_workflow_endpoint_injects_managed_load_node(workspace, aiohttp_cl
     img = torch.zeros(1, 8, 8, 3)
     root = save_image(img, "wf_test", {}, workspace["root"], workspace["db"])
 
-    # Embed a fake workflow into the PNG
+    # Embed a LiteGraph-format workflow into the PNG (this is what ComfyUI stores in the "workflow" chunk)
     original_workflow = {
-        "1": {"class_type": "KSampler", "inputs": {"steps": 20}},
-        "2": {"class_type": "LoadImage", "inputs": {"image": "source.png"}},
+        "nodes": [
+            {"id": 1, "type": "KSampler"},
+            {"id": 2, "type": "LoadImage", "widgets_values": ["source.png"]},
+            {"id": 3, "type": "SaveImage", "properties": {}},
+        ],
+        "links": [],
     }
     pil = PilImage.open(root["abs_path"])
     info = PngInfo()
@@ -198,9 +202,17 @@ async def test_workflow_endpoint_injects_managed_load_node(workspace, aiohttp_cl
     assert resp.status == 200
     workflow = await resp.json()
 
-    # At least one node must be ManagedLoadImage
-    node_types = [n["class_type"] for n in workflow.values()]
+    node_types = [n["type"] for n in workflow["nodes"]]
+    assert "ManagedSaveImage" in node_types
     assert "ManagedLoadImage" in node_types
+    assert "LoadImage" in node_types  # untouched
+
+    load_node = next(n for n in workflow["nodes"] if n["type"] == "ManagedLoadImage")
+    save_node = next(n for n in workflow["nodes"] if n["type"] == "ManagedSaveImage")
+    assert any(
+        link[1] == load_node["id"] and link[3] == save_node["id"]
+        for link in workflow["links"]
+    )
 
 
 # --- import ---
@@ -1091,6 +1103,60 @@ async def test_all_images_root_image_includes_root_uuid_equal_to_uuid(workspace,
     assert len(data) == 1
     assert "root_uuid" in data[0]
     assert data[0]["root_uuid"] == saved["uuid"]
+
+
+# --- orphan filter ---
+
+@pytest.mark.asyncio
+async def test_all_images_orphan_filter_returns_only_orphans(workspace, aiohttp_client):
+    img = torch.zeros(1, 8, 8, 3)
+    orphan = save_image(img, "solo", {}, workspace["root"], workspace["db"])
+    root = save_image(img, "chain", {}, workspace["root"], workspace["db"])
+    child_prompt = {"1": {"class_type": "ManagedLoadImage", "inputs": {"image": root["filename"]}}}
+    save_image(img, "chain", child_prompt, workspace["root"], workspace["db"])
+
+    app = make_app(workspace["root"], workspace["db"])
+    client = await aiohttp_client(app)
+
+    resp = await client.get("/image-manager/api/all-images?orphan=true")
+    data = await resp.json()
+
+    uuids = {d["uuid"] for d in data}
+    assert orphan["uuid"] in uuids
+    assert root["uuid"] not in uuids
+    assert all(d["orphan"] is True for d in data)
+
+
+@pytest.mark.asyncio
+async def test_all_images_orphan_filter_empty_when_no_orphans(workspace, aiohttp_client):
+    img = torch.zeros(1, 8, 8, 3)
+    root = save_image(img, "chain", {}, workspace["root"], workspace["db"])
+    child_prompt = {"1": {"class_type": "ManagedLoadImage", "inputs": {"image": root["filename"]}}}
+    save_image(img, "chain", child_prompt, workspace["root"], workspace["db"])
+
+    app = make_app(workspace["root"], workspace["db"])
+    client = await aiohttp_client(app)
+
+    resp = await client.get("/image-manager/api/all-images?orphan=true")
+    data = await resp.json()
+    assert data == []
+
+
+@pytest.mark.asyncio
+async def test_all_images_orphan_filter_combined_with_root_name(workspace, aiohttp_client):
+    img = torch.zeros(1, 8, 8, 3)
+    orphan_a = save_image(img, "folderA", {}, workspace["root"], workspace["db"])
+    orphan_b = save_image(img, "folderB", {}, workspace["root"], workspace["db"])
+
+    app = make_app(workspace["root"], workspace["db"])
+    client = await aiohttp_client(app)
+
+    resp = await client.get("/image-manager/api/all-images?orphan=true&root_name=folderA")
+    data = await resp.json()
+
+    uuids = {d["uuid"] for d in data}
+    assert orphan_a["uuid"] in uuids
+    assert orphan_b["uuid"] not in uuids
 
 
 # --- metadata ---
@@ -2389,3 +2455,463 @@ async def test_delete_folder_nonexistent_returns_404(workspace, aiohttp_client):
 
     resp = await client.delete("/image-manager/api/folders/no_such_folder")
     assert resp.status == 404
+
+
+# --- send-to-comfy WebSocket push ---
+
+
+@pytest.mark.asyncio
+async def test_send_to_comfy_pushes_workflow_over_websocket(workspace, aiohttp_client):
+    import json as _json
+    from PIL.PngImagePlugin import PngInfo
+
+    img = torch.zeros(1, 8, 8, 3)
+    root = save_image(img, "wf_test", {}, workspace["root"], workspace["db"])
+
+    original_workflow = {
+        "nodes": [
+            {"id": 1, "type": "KSampler"},
+            {"id": 2, "type": "LoadImage", "widgets_values": ["source.png"]},
+            {"id": 3, "type": "SaveImage", "properties": {}},
+        ],
+        "links": [],
+    }
+    pil = PilImage.open(root["abs_path"])
+    info = PngInfo()
+    info.add_text("workflow", _json.dumps(original_workflow))
+    pil.save(root["abs_path"], pnginfo=info)
+
+    sent = []
+
+    def fake_send(event, data):
+        sent.append({"event": event, "data": data})
+
+    app = make_app(workspace["root"], workspace["db"], ws_send=fake_send)
+    client = await aiohttp_client(app)
+    resp = await client.post(f"/image-manager/api/send-to-comfy/{root['uuid']}")
+
+    assert resp.status == 200
+    data = await resp.json()
+    assert data == {"ok": True}
+
+    assert len(sent) == 1
+    assert sent[0]["event"] == "im_load_workflow"
+    workflow = sent[0]["data"]["workflow"]
+    node_types = [n["type"] for n in workflow["nodes"]]
+    assert "ManagedSaveImage" in node_types
+    assert "ManagedLoadImage" in node_types
+    assert "LoadImage" in node_types  # untouched
+
+    load_node = next(n for n in workflow["nodes"] if n["type"] == "ManagedLoadImage")
+    save_node = next(n for n in workflow["nodes"] if n["type"] == "ManagedSaveImage")
+    assert any(
+        link[1] == load_node["id"] and link[3] == save_node["id"]
+        for link in workflow["links"]
+    )
+
+
+@pytest.mark.asyncio
+async def test_send_to_comfy_unknown_uuid_returns_404(workspace, aiohttp_client):
+    app = make_app(workspace["root"], workspace["db"], ws_send=lambda *a: None)
+    client = await aiohttp_client(app)
+    resp = await client.post("/image-manager/api/send-to-comfy/no-such-uuid")
+    assert resp.status == 404
+
+
+@pytest.mark.asyncio
+async def test_send_to_comfy_no_workflow_metadata_returns_error(workspace, aiohttp_client):
+    img = torch.zeros(1, 8, 8, 3)
+    root = save_image(img, "no_wf", {}, workspace["root"], workspace["db"])
+
+    sent = []
+    app = make_app(workspace["root"], workspace["db"], ws_send=lambda *a: sent.append(a))
+    client = await aiohttp_client(app)
+    resp = await client.post(f"/image-manager/api/send-to-comfy/{root['uuid']}")
+
+    assert resp.status == 404
+    assert len(sent) == 0
+
+
+# --- search ---
+
+@pytest.mark.asyncio
+async def test_search_matches_root_name(workspace, aiohttp_client):
+    img = torch.zeros(1, 8, 8, 3)
+    save_image(img, "golden_hour", {}, workspace["root"], workspace["db"])
+    save_image(img, "nightscape", {}, workspace["root"], workspace["db"])
+
+    app = make_app(workspace["root"], workspace["db"])
+    client = await aiohttp_client(app)
+    resp = await client.get("/image-manager/api/search?q=golden")
+    assert resp.status == 200
+    data = await resp.json()
+    assert len(data) == 1
+    assert data[0]["root_name"] == "golden_hour"
+
+
+@pytest.mark.asyncio
+async def test_search_matches_positive_prompt(workspace, aiohttp_client):
+    """Images indexed with a positive_prompt are returned when the query matches that field."""
+    import json as _json
+    from PIL import Image as PilImage
+    from PIL.PngImagePlugin import PngInfo
+
+    workflow = {
+        "1": {"class_type": "CLIPTextEncode", "inputs": {"text": "majestic waterfall"}},
+        "2": {"class_type": "CLIPTextEncode", "inputs": {"text": "blurry"}},
+        "3": {
+            "class_type": "KSampler",
+            "inputs": {
+                "positive": [1, 0],
+                "negative": [2, 0],
+                "steps": 20, "cfg": 7.0, "sampler_name": "euler",
+                "scheduler": "normal", "seed": 1, "denoise": 1.0,
+            },
+        },
+    }
+    img_uuid = "bbbbbbbb-0000-0000-0000-000000000001"
+    date_dir = workspace["root"] / "2024-01-02" / "landscape"
+    date_dir.mkdir(parents=True)
+    png_path = date_dir / "landscape_00001_.png"
+    info = PngInfo()
+    info.add_text("lineage_id", img_uuid)
+    info.add_text("parent_id", "")
+    info.add_text("prompt", _json.dumps(workflow))
+    PilImage.new("RGB", (8, 8)).save(png_path, pnginfo=info)
+    rel = str(Path("2024-01-02") / "landscape" / "landscape_00001_.png")
+    sidecar = {
+        "uuid": img_uuid, "parent_uuid": None, "root_uuid": img_uuid,
+        "root_name": "landscape", "created_at": "2024-01-02T00:00:00+00:00", "filename": rel,
+    }
+    png_path.with_suffix(".json").write_text(_json.dumps(sidecar))
+
+    from lineage import scan_and_import
+    scan_and_import(workspace["root"], workspace["db"])
+
+    app = make_app(workspace["root"], workspace["db"])
+    client = await aiohttp_client(app)
+    resp = await client.get("/image-manager/api/search?q=waterfall")
+    assert resp.status == 200
+    data = await resp.json()
+    assert len(data) == 1
+    assert data[0]["uuid"] == img_uuid
+
+
+@pytest.mark.asyncio
+async def test_search_scoped_to_root_name(workspace, aiohttp_client):
+    img = torch.zeros(1, 8, 8, 3)
+    save_image(img, "portrait", {}, workspace["root"], workspace["db"])
+    save_image(img, "portrait_sketch", {}, workspace["root"], workspace["db"])
+
+    app = make_app(workspace["root"], workspace["db"])
+    client = await aiohttp_client(app)
+    resp = await client.get("/image-manager/api/search?q=portrait&root_name=portrait")
+    assert resp.status == 200
+    data = await resp.json()
+    assert all(r["root_name"] == "portrait" for r in data)
+    assert len(data) == 1
+
+
+@pytest.mark.asyncio
+async def test_search_empty_query_returns_empty_list(workspace, aiohttp_client):
+    img = torch.zeros(1, 8, 8, 3)
+    save_image(img, "portrait", {}, workspace["root"], workspace["db"])
+
+    app = make_app(workspace["root"], workspace["db"])
+    client = await aiohttp_client(app)
+    resp = await client.get("/image-manager/api/search?q=")
+    assert resp.status == 200
+    data = await resp.json()
+    assert data == []
+
+
+@pytest.mark.asyncio
+async def test_search_matches_loras_at_save_time(workspace, aiohttp_client):
+    """Lora names stored at save time are immediately searchable."""
+    workflow = {
+        "1": {"class_type": "CheckpointLoaderSimple", "inputs": {"ckpt_name": "v1.safetensors"}},
+        "2": {"class_type": "LoraLoader", "inputs": {"lora_name": "detail_tweaker.safetensors", "strength_model": 0.8}},
+        "3": {"class_type": "LoraLoader", "inputs": {"lora_name": "add_detail.safetensors", "strength_model": 0.6}},
+        "4": {"class_type": "CLIPTextEncode", "inputs": {"text": "portrait"}},
+        "5": {"class_type": "CLIPTextEncode", "inputs": {"text": "blurry"}},
+        "6": {
+            "class_type": "KSampler",
+            "inputs": {
+                "positive": [4, 0], "negative": [5, 0],
+                "steps": 20, "cfg": 7.0, "sampler_name": "euler",
+                "scheduler": "normal", "seed": 1, "denoise": 1.0,
+            },
+        },
+    }
+    img = torch.zeros(1, 8, 8, 3)
+    r = save_image(img, "portrait", workflow, workspace["root"], workspace["db"])
+
+    app = make_app(workspace["root"], workspace["db"])
+    client = await aiohttp_client(app)
+    resp = await client.get("/image-manager/api/search?q=detail_tweaker")
+    assert resp.status == 200
+    data = await resp.json()
+    assert len(data) == 1
+    assert data[0]["uuid"] == r["uuid"]
+
+
+@pytest.mark.asyncio
+async def test_search_matches_loras_after_scan(workspace, aiohttp_client):
+    """Lora names are extracted and searchable after a startup scan."""
+    import json as _json
+    from PIL import Image as PilImage
+    from PIL.PngImagePlugin import PngInfo
+
+    workflow = {
+        "1": {"class_type": "LoraLoader", "inputs": {"lora_name": "vintage_film.safetensors", "strength_model": 1.0}},
+        "2": {"class_type": "CLIPTextEncode", "inputs": {"text": "cityscape"}},
+        "3": {"class_type": "CLIPTextEncode", "inputs": {"text": "blurry"}},
+        "4": {
+            "class_type": "KSampler",
+            "inputs": {
+                "positive": [2, 0], "negative": [3, 0],
+                "steps": 20, "cfg": 7.0, "sampler_name": "euler",
+                "scheduler": "normal", "seed": 2, "denoise": 1.0,
+            },
+        },
+    }
+    img_uuid = "cccccccc-0000-0000-0000-000000000001"
+    date_dir = workspace["root"] / "cityscape"
+    date_dir.mkdir(parents=True)
+    png_path = date_dir / "cityscape_00001_.png"
+    info = PngInfo()
+    info.add_text("lineage_id", img_uuid)
+    info.add_text("parent_id", "")
+    info.add_text("prompt", _json.dumps(workflow))
+    PilImage.new("RGB", (8, 8)).save(png_path, pnginfo=info)
+    rel = str(Path("cityscape") / "cityscape_00001_.png")
+    sidecar = {
+        "uuid": img_uuid, "parent_uuid": None, "root_uuid": img_uuid,
+        "root_name": "cityscape", "created_at": "2024-03-01T00:00:00+00:00", "filename": rel,
+    }
+    png_path.with_suffix(".json").write_text(_json.dumps(sidecar))
+
+    from lineage import scan_and_import
+    scan_and_import(workspace["root"], workspace["db"])
+
+    app = make_app(workspace["root"], workspace["db"])
+    client = await aiohttp_client(app)
+    resp = await client.get("/image-manager/api/search?q=vintage_film")
+    assert resp.status == 200
+    data = await resp.json()
+    assert len(data) == 1
+    assert data[0]["uuid"] == img_uuid
+
+
+# --- import_from_input appears in lineage tree ---
+
+@pytest.mark.asyncio
+async def test_import_from_input_appears_as_root_in_api(workspace, aiohttp_client, tmp_path):
+    src = tmp_path / "scene.jpg"
+    from PIL import Image as PilImage
+    PilImage.new("RGB", (8, 8), color=(128, 64, 32)).save(src)
+
+    import_from_input(src, workspace["root"], workspace["db"])
+
+    app = make_app(workspace["root"], workspace["db"])
+    client = await aiohttp_client(app)
+    resp = await client.get("/image-manager/api/roots")
+    assert resp.status == 200
+    data = await resp.json()
+
+    assert len(data) == 1
+    assert data[0]["parent_uuid"] is None
+    assert data[0]["root_name"] == "scene"
+
+
+
+# --- database lock fix: timeout=10 ---
+
+@pytest.mark.asyncio
+async def test_route_opens_db_with_timeout(workspace, aiohttp_client):
+    """Route handlers pass timeout=10 so writers retry instead of failing immediately."""
+    connect_calls = []
+    _real_connect = sqlite3.connect
+
+    def spy_connect(path, *args, **kwargs):
+        connect_calls.append(kwargs)
+        return _real_connect(path, *args, **kwargs)
+
+    import api as _api_module
+    app = make_app(workspace["root"], workspace["db"])
+    client = await aiohttp_client(app)
+
+    with patch.object(_api_module.sqlite3, "connect", side_effect=spy_connect):
+        resp = await client.get("/image-manager/api/roots")
+    assert resp.status == 200
+    assert any(kw.get("timeout") == 10 for kw in connect_calls)
+
+
+def test_wal_allows_concurrent_reads_during_write(workspace):
+    """WAL mode lets a reader proceed while a write transaction is open (no freeze)."""
+    import threading
+    import time
+
+    img = torch.zeros(1, 8, 8, 3)
+    save_image(img, "wal_test", {}, workspace["root"], workspace["db"])
+
+    write_started = threading.Event()
+    write_release = threading.Event()
+
+    def hold_write():
+        con = sqlite3.connect(workspace["db"])
+        con.execute("BEGIN IMMEDIATE")
+        write_started.set()
+        write_release.wait(timeout=5)
+        con.rollback()
+        con.close()
+
+    t = threading.Thread(target=hold_write, daemon=True)
+    t.start()
+    write_started.wait(timeout=2)
+
+    start = time.monotonic()
+    con = sqlite3.connect(workspace["db"], timeout=10)
+    rows = con.execute("SELECT uuid FROM images").fetchall()
+    elapsed = time.monotonic() - start
+    con.close()
+
+    write_release.set()
+    t.join(timeout=2)
+
+    assert elapsed < 1.0, f"Read blocked for {elapsed:.2f}s — WAL mode may not be set"
+    assert len(rows) == 1
+
+
+# --- _inject_parent_into_workflow ---
+
+def test_inject_swaps_save_image_to_managed_save_image():
+    workflow = {
+        "nodes": [
+            {"id": 1, "type": "KSampler"},
+            {"id": 2, "type": "SaveImage", "properties": {"Node name for S&R": "SaveImage"}},
+        ],
+        "links": [],
+    }
+    result = _inject_parent_into_workflow(workflow, "portrait_001.png")
+    node_types = [n["type"] for n in result["nodes"]]
+    assert "SaveImage" not in node_types
+    assert "ManagedSaveImage" in node_types
+    save_node = next(n for n in result["nodes"] if n["type"] == "ManagedSaveImage")
+    assert save_node["properties"]["Node name for S&R"] == "ManagedSaveImage"
+
+
+def test_inject_adds_managed_load_image_with_filename():
+    workflow = {
+        "nodes": [
+            {"id": 1, "type": "KSampler"},
+            {"id": 2, "type": "SaveImage", "properties": {}},
+        ],
+        "links": [],
+    }
+    result = _inject_parent_into_workflow(workflow, "portrait_001.png")
+    node_types = [n["type"] for n in result["nodes"]]
+    assert "ManagedLoadImage" in node_types
+    load_node = next(n for n in result["nodes"] if n["type"] == "ManagedLoadImage")
+    assert load_node["widgets_values"][0] == "portrait_001.png"
+    assert load_node["widgets_values"][1] == "image"
+
+
+def test_inject_adds_link_from_load_to_save():
+    workflow = {
+        "nodes": [
+            {"id": 1, "type": "KSampler"},
+            {"id": 2, "type": "SaveImage", "properties": {}},
+        ],
+        "links": [],
+    }
+    result = _inject_parent_into_workflow(workflow, "portrait_001.png")
+    load_node = next(n for n in result["nodes"] if n["type"] == "ManagedLoadImage")
+    save_node = next(n for n in result["nodes"] if n["type"] == "ManagedSaveImage")
+
+    assert len(result["links"]) == 1
+    link = result["links"][0]
+    # link format: [link_id, from_node_id, from_slot, to_node_id, to_slot, type]
+    assert link[1] == load_node["id"]    # from ManagedLoadImage
+    assert link[2] == 2                  # output slot 2 (managed_name)
+    assert link[3] == save_node["id"]    # to ManagedSaveImage
+    assert link[4] == 1                  # input slot 1 (parent_name)
+
+
+def test_inject_two_save_image_nodes_both_swapped_both_linked():
+    workflow = {
+        "nodes": [
+            {"id": 1, "type": "KSampler"},
+            {"id": 2, "type": "SaveImage", "properties": {}},
+            {"id": 3, "type": "SaveImage", "properties": {}},
+        ],
+        "links": [],
+    }
+    result = _inject_parent_into_workflow(workflow, "portrait_001.png")
+    node_types = [n["type"] for n in result["nodes"]]
+    assert node_types.count("ManagedSaveImage") == 2
+    assert node_types.count("SaveImage") == 0
+    assert node_types.count("ManagedLoadImage") == 1
+
+    load_node = next(n for n in result["nodes"] if n["type"] == "ManagedLoadImage")
+    save_nodes = [n for n in result["nodes"] if n["type"] == "ManagedSaveImage"]
+    save_ids = {n["id"] for n in save_nodes}
+
+    # Two links, both originating from the single load node
+    assert len(result["links"]) == 2
+    for link in result["links"]:
+        assert link[1] == load_node["id"]
+        assert link[2] == 2
+        assert link[3] in save_ids
+        assert link[4] == 1
+
+
+def test_inject_existing_managed_save_image_gets_wired_not_duplicated():
+    workflow = {
+        "nodes": [
+            {"id": 1, "type": "KSampler"},
+            {"id": 2, "type": "ManagedSaveImage", "properties": {"Node name for S&R": "ManagedSaveImage"}},
+        ],
+        "links": [],
+    }
+    result = _inject_parent_into_workflow(workflow, "portrait_001.png")
+    node_types = [n["type"] for n in result["nodes"]]
+    assert node_types.count("ManagedSaveImage") == 1  # no new one added
+    assert "ManagedLoadImage" in node_types
+
+    load_node = next(n for n in result["nodes"] if n["type"] == "ManagedLoadImage")
+    save_node = next(n for n in result["nodes"] if n["type"] == "ManagedSaveImage")
+    assert len(result["links"]) == 1
+    link = result["links"][0]
+    assert link[1] == load_node["id"]
+    assert link[3] == save_node["id"]
+
+
+def test_inject_no_save_nodes_returns_workflow_unchanged():
+    workflow = {
+        "nodes": [
+            {"id": 1, "type": "KSampler"},
+            {"id": 2, "type": "VAEDecode"},
+        ],
+        "links": [[1, 1, 0, 2, 0, "LATENT"]],
+    }
+    result = _inject_parent_into_workflow(workflow, "portrait_001.png")
+    assert len(result["nodes"]) == 2
+    assert len(result["links"]) == 1
+    assert all(n["type"] != "ManagedLoadImage" for n in result["nodes"])
+
+
+def test_inject_node_and_link_ids_are_unique():
+    workflow = {
+        "nodes": [
+            {"id": 1, "type": "KSampler"},
+            {"id": 2, "type": "SaveImage", "properties": {}},
+            {"id": 3, "type": "SaveImage", "properties": {}},
+        ],
+        "links": [[1, 0, 0, 1, 0, "MODEL"], [2, 0, 1, 1, 1, "CLIP"]],
+    }
+    result = _inject_parent_into_workflow(workflow, "portrait_001.png")
+    node_ids = [n["id"] for n in result["nodes"]]
+    assert len(node_ids) == len(set(node_ids))
+    link_ids = [link[0] for link in result["links"]]
+    assert len(link_ids) == len(set(link_ids))

@@ -23,3 +23,5 @@ test-results/
 
 prd.json
 run_claude.log
+
+memory/

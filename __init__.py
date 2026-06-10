@@ -34,6 +34,16 @@ DB_PATH = _PKG_DIR / "image_manager.db"
 # --- Register managed folder with ComfyUI ---
 folder_paths.add_model_folder_path("managed_images", str(MANAGED_ROOT))
 
+# --- Patch get_directory_by_type to serve managed images via /view ---
+_original_get_directory_by_type = folder_paths.get_directory_by_type
+
+def _patched_get_directory_by_type(type_name):
+    if type_name == "managed":
+        return str(MANAGED_ROOT)
+    return _original_get_directory_by_type(type_name)
+
+folder_paths.get_directory_by_type = _patched_get_directory_by_type
+
 # --- Init SQLite schema ---
 from .lineage import init_db, scan_and_import, _create_missing_sidecars
 init_db(DB_PATH)
@@ -52,7 +62,7 @@ WEB_DIRECTORY = "./web"
 try:
     from server import PromptServer
     from .api import make_app
-    _api_app = make_app(MANAGED_ROOT, DB_PATH)
+    _api_app = make_app(MANAGED_ROOT, DB_PATH, ws_send=PromptServer.instance.send_sync)
     for resource in _api_app.router.resources():
         for route in resource:
             PromptServer.instance.app.router.add_route(route.method, resource.canonical, route.handler)
@@ -60,14 +70,16 @@ except Exception as _e:
     print(f"[image_manager] WARNING: could not mount API routes: {_e}")
 
 # --- Node exports ---
-from .nodes import ManagedSaveImage, ManagedLoadImage
+from .nodes import ManagedSaveImage, ManagedLoadImage, ManagedLoadImageFromInput
 
 NODE_CLASS_MAPPINGS = {
     "ManagedSaveImage": ManagedSaveImage,
     "ManagedLoadImage": ManagedLoadImage,
+    "ManagedLoadImageFromInput": ManagedLoadImageFromInput,
 }
 NODE_DISPLAY_NAME_MAPPINGS = {
     "ManagedSaveImage": "Save Image (Managed)",
     "ManagedLoadImage": "Load Image (Managed)",
+    "ManagedLoadImageFromInput": "Load Image From Input (Managed)",
 }
 __all__ = ["NODE_CLASS_MAPPINGS", "NODE_DISPLAY_NAME_MAPPINGS"]

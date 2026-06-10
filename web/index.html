@@ -6,45 +6,112 @@
   <title>Image Manager</title>
   <link rel="icon" type="image/svg+xml" href="/image-manager/favicon.svg">
   <style>
+    :root {
+      /* Backgrounds */
+      --im-bg:          #1a1a1a;
+      --im-bg-card:     #2a2a2a;
+      --im-bg-elevated: #1e1e1e;
+      --im-bg-subtle:   #222;
+      --im-bg-input:    #2a2a2a;
+
+      /* Text */
+      --im-text:        #e0e0e0;
+      --im-text-muted:  #888;
+      --im-text-dim:    #666;
+      --im-text-faint:  #555;
+
+      /* Borders */
+      --im-border:      #444;
+      --im-border-sub:  #333;
+      --im-border-dim:  #2e2e2e;
+      --im-border-faint:#2a2a2a;
+
+      /* Toolbar buttons (default, non-active state) */
+      --im-btn-bg:   #444;
+      --im-btn-text: #ddd;
+
+      /* Inputs */
+      --im-input-bg:     #2a2a2a;
+      --im-input-text:   #e0e0e0;
+      --im-input-border: #555;
+
+      /* Selection state */
+      --im-selected-bg:     #1a2a1a;
+      --im-selected-border: #5abf5a;
+    }
+
+    body.light-theme {
+      --im-bg:          #f0f0f0;
+      --im-bg-card:     #ffffff;
+      --im-bg-elevated: #f5f5f5;
+      --im-bg-subtle:   #e8e8e8;
+      --im-bg-input:    #ffffff;
+      --im-text:        #1a1a1a;
+      --im-text-muted:  #555;
+      --im-text-dim:    #888;
+      --im-text-faint:  #999;
+      --im-border:      #ccc;
+      --im-border-sub:  #ddd;
+      --im-border-dim:  #ccc;
+      --im-border-faint:#e0e0e0;
+      --im-btn-bg:      #ddd;
+      --im-btn-text:    #333;
+      --im-input-bg:    #ffffff;
+      --im-input-text:  #1a1a1a;
+      --im-input-border:#aaa;
+
+      /* Selection state */
+      --im-selected-bg:     #e0f4e0;
+      --im-selected-border: #2a9a2a;
+    }
+
     * { box-sizing: border-box; margin: 0; padding: 0; }
-    body { background: #1a1a1a; color: #e0e0e0; font-family: system-ui, sans-serif; padding: 24px; }
-    h1 { font-size: 1.4rem; margin-bottom: 24px; color: #fff; }
+    body { background: var(--im-bg); color: var(--im-text); font-family: system-ui, sans-serif; padding: 24px; }
+    h1 { font-size: 1.4rem; margin-bottom: 24px; color: var(--im-text); }
     .date-group { margin-bottom: 32px; }
-    .date-label { font-size: 0.85rem; color: #888; margin-bottom: 12px; text-transform: uppercase; letter-spacing: 0.05em; cursor: default; }
+    .date-label { font-size: 0.85rem; color: var(--im-text-muted); margin-bottom: 12px; text-transform: uppercase; letter-spacing: 0.05em; cursor: default; }
     .date-label.collapsible { cursor: pointer; user-select: none; display: flex; align-items: center; gap: 6px; }
-    .date-label.collapsible:hover { color: #bbb; }
+    .date-label.collapsible:hover { color: var(--im-text); }
     .collapse-chevron { display: inline-block; transition: transform 0.15s; }
     .date-group.collapsed .collapse-chevron { transform: rotate(-90deg); }
     .date-group.collapsed .grid { display: none; }
     .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 12px; }
-    .card { background: #2a2a2a; border-radius: 8px; overflow: hidden; cursor: pointer; transition: transform 0.15s; position: relative; }
+    .card { background: var(--im-bg-card); border-radius: 8px; overflow: hidden; cursor: pointer; transition: transform 0.15s; position: relative; }
     .card:hover { transform: scale(1.02); }
     .card img { width: 100%; aspect-ratio: 1; object-fit: cover; display: block; background: #333; }
     .card-body { padding: 8px 10px; }
     .card-name { font-size: 0.8rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-    .card-tip { font-size: 0.72rem; color: #777; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-top: 2px; }
-    .empty { color: #666; text-align: center; padding: 60px 0; }
+    .card-tip { font-size: 0.72rem; color: var(--im-text-dim); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-top: 2px; }
+    .empty { color: var(--im-text-dim); text-align: center; padding: 60px 0; }
     #lightbox { display:none;position:fixed;inset:0;background:rgba(0,0,0,0.85);z-index:200;align-items:center;justify-content:center; }
     #lightbox.open { display:flex; }
     #lb-inner { display:flex;gap:24px;max-height:90vh;max-width:95vw;align-items:flex-start; }
-    #lb-image-area { flex:1;min-width:0;display:flex;align-items:center;justify-content:center; }
+    #lb-image-area { flex:1;min-width:0;display:flex;align-items:center;justify-content:center;position:relative; }
     #lightbox-img { max-width:100%;max-height:85vh;object-fit:contain;border-radius:6px; }
-    #lb-panel { width:300px;flex-shrink:0;background:#2a2a2a;border-radius:8px;display:flex;flex-direction:column;max-height:90vh; }
+    .lb-nav-btn { position:absolute;top:50%;transform:translateY(-50%);background:rgba(0,0,0,0.45);border:none;color:#fff;font-size:1.6rem;line-height:1;padding:10px 14px;border-radius:6px;cursor:pointer;z-index:10;transition:opacity 0.15s; }
+    .lb-nav-btn:hover { background:rgba(0,0,0,0.7); }
+    .lb-nav-btn:disabled { opacity:0.2;cursor:default; }
+    #lb-nav-prev { left:6px; }
+    #lb-nav-next { right:6px; }
+    #lb-panel { width:300px;flex-shrink:0;background:var(--im-bg-card);border-radius:8px;display:flex;flex-direction:column;max-height:90vh; }
     #lb-panel-content { flex:1;overflow-y:auto;padding:16px; }
-    #lb-panel-footer { padding:12px 16px;border-top:1px solid #333;display:flex;flex-direction:column;gap:8px; }
+    #lb-panel-footer { padding:12px 16px;border-top:1px solid var(--im-border-sub);display:flex;flex-direction:column;gap:8px; }
     .lb-footer-row { display:flex;gap:8px; }
-    .lb-footer-row button, #lb-panel-footer > button { background:#444;border:none;color:#ddd;padding:6px 12px;border-radius:5px;cursor:pointer;font-size:0.82rem;flex:1; }
-    .lb-footer-row button:hover, #lb-panel-footer > button:hover { background:#555; }
+    .lb-footer-row button, #lb-panel-footer > button { background:var(--im-btn-bg);border:none;color:var(--im-btn-text);padding:6px 12px;border-radius:5px;cursor:pointer;font-size:0.82rem;flex:1; }
+    .lb-footer-row button:hover, #lb-panel-footer > button:hover { filter: brightness(1.15); }
     .lb-section { margin-bottom:16px; }
-    .lb-section-title { font-size:0.7rem;text-transform:uppercase;letter-spacing:0.08em;color:#666;margin-bottom:8px;border-bottom:1px solid #333;padding-bottom:4px; }
+    .lb-section-title { font-size:0.7rem;text-transform:uppercase;letter-spacing:0.08em;color:var(--im-text-dim);margin-bottom:8px;border-bottom:1px solid var(--im-border-sub);padding-bottom:4px; }
     .lb-row { display:flex;justify-content:space-between;align-items:baseline;gap:8px;margin-bottom:5px;font-size:0.82rem; }
-    .lb-label { color:#888;flex-shrink:0; }
-    .lb-val { color:#e0e0e0;text-align:right;word-break:break-word; }
+    .lb-label { color:var(--im-text-muted);flex-shrink:0; }
+    .lb-val { color:var(--im-text);text-align:right;word-break:break-word; }
     .lb-prompt-block { margin-bottom:10px; }
     .lb-prompt-block .lb-label { display:block;margin-bottom:3px; }
-    .lb-prompt { font-size:0.8rem;color:#ccc;white-space:pre-wrap;word-break:break-word;line-height:1.45;background:#222;border-radius:4px;padding:6px 8px; }
-    .lb-no-workflow { color:#666;font-size:0.82rem;font-style:italic;padding:4px 0; }
-    .lb-loras { font-size:0.8rem;color:#ccc; }
+    .lb-prompt-header { display:flex;justify-content:space-between;align-items:center;margin-bottom:3px; }
+    .lb-copy-btn { background:none;border:none;color:var(--im-text-muted);cursor:pointer;font-size:0.72rem;padding:0 2px;opacity:0.7; }
+    .lb-copy-btn:hover { opacity:1; }
+    .lb-prompt { font-size:0.8rem;color:var(--im-text);white-space:pre-wrap;word-break:break-word;line-height:1.45;background:var(--im-bg-subtle);border-radius:4px;padding:6px 8px; }
+    .lb-no-workflow { color:var(--im-text-dim);font-size:0.82rem;font-style:italic;padding:4px 0; }
+    .lb-loras { font-size:0.8rem;color:var(--im-text); }
     .lb-loras div { margin-bottom:2px; }
 
     #import-drawer-btn {
@@ -53,79 +120,103 @@
     }
     #import-drawer-btn:hover { background: #6a4a2a; }
     #settings-btn {
-      background: #2e2e2e; border: 1px solid #444; color: #999; padding: 6px 10px;
+      background: var(--im-bg-card); border: 1px solid var(--im-border); color: var(--im-text-muted); padding: 6px 10px;
       border-radius: 5px; cursor: pointer; font-size: 1rem; line-height: 1;
     }
-    #settings-btn:hover { background: #3a3a3a; color: #ddd; }
+    #settings-btn:hover { background: var(--im-bg-elevated); color: var(--im-text); }
+    #drop-overlay {
+      display: none;
+      position: fixed;
+      inset: 0;
+      z-index: 9990;
+      background: rgba(0, 0, 0, 0.55);
+      align-items: center;
+      justify-content: center;
+    }
+    #drop-overlay.active { display: flex; }
+    #drop-overlay-inner {
+      border: 3px dashed #aaa;
+      border-radius: 16px;
+      padding: 48px 80px;
+      color: #fff;
+      font-size: 1.4rem;
+      font-weight: 500;
+      pointer-events: none;
+      text-align: center;
+    }
+    body.light-theme #drop-overlay-inner {
+      border-color: #555;
+      color: #fff;
+    }
     #drawer-backdrop {
       display: none; position: fixed; inset: 0; z-index: 499;
     }
     #drawer-backdrop.open { display: block; }
     #settings-drawer {
       position: fixed; top: 0; right: -420px; width: 400px; height: 100vh;
-      background: #1e1e1e; border-left: 1px solid #333; z-index: 500;
+      background: var(--im-bg-elevated); border-left: 1px solid var(--im-border-sub); z-index: 500;
       display: flex; flex-direction: column; transition: right 0.25s ease;
       box-shadow: -4px 0 24px rgba(0,0,0,0.5);
     }
     #settings-drawer.open { right: 0; }
     #settings-drawer-header {
       display: flex; justify-content: space-between; align-items: center;
-      padding: 16px 20px; border-bottom: 1px solid #333;
+      padding: 16px 20px; border-bottom: 1px solid var(--im-border-sub);
     }
-    #settings-drawer-header h3 { font-size: 1rem; color: #fff; }
+    #settings-drawer-header h3 { font-size: 1rem; color: var(--im-text); }
     #settings-drawer-header button {
-      background: none; border: none; color: #aaa; font-size: 1.3rem; cursor: pointer;
+      background: none; border: none; color: var(--im-text-muted); font-size: 1.3rem; cursor: pointer;
     }
-    #settings-drawer-header button:hover { color: #fff; }
+    #settings-drawer-header button:hover { color: var(--im-text); }
     #settings-drawer-body { padding: 16px 20px; display: flex; flex-direction: column; gap: 20px; flex: 1; overflow-y: auto; }
     .settings-section-title {
       font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.08em;
-      color: #666; margin-bottom: 12px; border-bottom: 1px solid #2a2a2a; padding-bottom: 6px;
+      color: var(--im-text-muted); margin-bottom: 12px; border-bottom: 1px solid var(--im-border-faint); padding-bottom: 6px;
     }
     .settings-row { display: flex; flex-direction: column; gap: 6px; }
-    .settings-row label { font-size: 0.8rem; color: #888; display: flex; justify-content: space-between; align-items: center; }
-    .settings-row label span { color: #e0e0e0; font-weight: 600; font-size: 0.85rem; }
+    .settings-row label { font-size: 0.8rem; color: var(--im-text-muted); display: flex; justify-content: space-between; align-items: center; }
+    .settings-row label span { color: var(--im-text); font-weight: 600; font-size: 0.85rem; }
     #settings-k-scale { width: 100%; accent-color: #5a8fbf; cursor: pointer; }
-    .settings-range-labels { display: flex; justify-content: space-between; font-size: 0.72rem; color: #555; margin-top: 2px; }
-    .settings-hint { font-size: 0.75rem; color: #555; margin-top: 4px; line-height: 1.4; }
+    .settings-range-labels { display: flex; justify-content: space-between; font-size: 0.72rem; color: var(--im-text-faint); margin-top: 2px; }
+    .settings-hint { font-size: 0.75rem; color: var(--im-text-faint); margin-top: 4px; line-height: 1.4; }
     #import-drawer {
       position: fixed; top: 0; right: -420px; width: 400px; height: 100vh;
-      background: #1e1e1e; border-left: 1px solid #333; z-index: 500;
+      background: var(--im-bg-elevated); border-left: 1px solid var(--im-border-sub); z-index: 500;
       display: flex; flex-direction: column; transition: right 0.25s ease;
       box-shadow: -4px 0 24px rgba(0,0,0,0.5);
     }
     #import-drawer.open { right: 0; }
     #import-drawer-header {
       display: flex; justify-content: space-between; align-items: center;
-      padding: 16px 20px; border-bottom: 1px solid #333;
+      padding: 16px 20px; border-bottom: 1px solid var(--im-border-sub);
     }
-    #import-drawer-header h3 { font-size: 1rem; color: #fff; }
+    #import-drawer-header h3 { font-size: 1rem; color: var(--im-text); }
     #import-drawer-header button {
-      background: none; border: none; color: #aaa; font-size: 1.3rem; cursor: pointer;
+      background: none; border: none; color: var(--im-text-muted); font-size: 1.3rem; cursor: pointer;
     }
-    #import-drawer-header button:hover { color: #fff; }
+    #import-drawer-header button:hover { color: var(--im-text); }
     #import-drawer-body { padding: 16px 20px; display: flex; flex-direction: column; gap: 12px; flex: 1; overflow: hidden; }
-    #import-drawer-body label { font-size: 0.8rem; color: #888; display: block; margin-bottom: 4px; }
+    #import-drawer-body label { font-size: 0.8rem; color: var(--im-text-muted); display: block; margin-bottom: 4px; }
     #import-drawer-path {
-      width: 100%; background: #2a2a2a; border: 1px solid #444; color: #e0e0e0;
+      width: 100%; background: var(--im-bg-input); border: 1px solid var(--im-border); color: var(--im-text);
       padding: 8px 10px; border-radius: 5px; font-size: 0.85rem; font-family: monospace;
     }
-    #import-drawer-path:focus { outline: none; border-color: #666; }
+    #import-drawer-path:focus { outline: none; border-color: var(--im-text-dim); }
     #import-drawer-warning {
       background: #3a2a1a; border: 1px solid #6a4a2a; border-radius: 5px;
       padding: 8px 12px; font-size: 0.78rem; color: #d4935a;
     }
     #import-drawer-log {
-      flex: 1; overflow-y: auto; background: #141414; border: 1px solid #2a2a2a;
+      flex: 1; overflow-y: auto; background: var(--im-bg); border: 1px solid var(--im-border-faint);
       border-radius: 5px; padding: 10px; font-size: 0.75rem; font-family: monospace;
-      color: #666; min-height: 0;
+      color: var(--im-text-dim); min-height: 0;
     }
     #import-drawer-log .log-line { margin-bottom: 3px; }
     #import-drawer-log .log-line.ok { color: #6a9f6a; }
     #import-drawer-log .log-line.skip { color: #666; }
     #import-drawer-log .log-line.done { color: #e8a060; font-weight: 600; }
     #import-drawer-footer {
-      padding: 14px 20px; border-top: 1px solid #333; display: flex; gap: 8px;
+      padding: 14px 20px; border-top: 1px solid var(--im-border-sub); display: flex; gap: 8px;
     }
     #import-drawer-footer button {
       flex: 1; padding: 8px; border-radius: 5px; border: none;
@@ -134,34 +225,72 @@
     #import-drawer-go { background: #5a3a1a; color: #e8a060; }
     #import-drawer-go:hover { background: #6a4a2a; }
     #import-drawer-go:disabled { opacity: 0.5; cursor: default; }
-    #import-drawer-cancel { background: #333; color: #aaa; }
-    #import-drawer-cancel:hover { background: #3a3a3a; }
+    #import-drawer-cancel { background: var(--im-btn-bg); color: var(--im-btn-text); }
+    #import-drawer-cancel:hover { filter: brightness(1.15); }
+
+    .card-btn {
+      flex: 1; font-size: 0.75rem; background: var(--im-btn-bg); border: none;
+      color: var(--im-btn-text); padding: 2px 8px; border-radius: 3px; cursor: pointer;
+    }
+    .card-btn-secondary {
+      flex: 1; font-size: 0.75rem; background: var(--im-bg-elevated); border: none;
+      color: var(--im-text-muted); padding: 2px 8px; border-radius: 3px; cursor: pointer;
+    }
+
+    .toolbar-btn {
+      background: var(--im-btn-bg);
+      border: none;
+      color: var(--im-btn-text);
+      padding: 6px 14px;
+      border-radius: 5px;
+      cursor: pointer;
+      font-size: 0.85rem;
+    }
+    .toolbar-select {
+      background: var(--im-bg-input);
+      border: 1px solid var(--im-input-border);
+      color: var(--im-input-text);
+      padding: 5px 8px;
+      border-radius: 5px;
+      font-size: 0.85rem;
+    }
+    .toolbar-input {
+      background: var(--im-bg-input);
+      border: 1px solid var(--im-input-border);
+      color: var(--im-input-text);
+      padding: 5px 10px;
+      border-radius: 5px;
+      font-size: 0.85rem;
+      width: 200px;
+      outline: none;
+    }
 
     #link-btn.active { background: #3a5a3a; color: #8fcf8f; border: 1px solid #5a9f5a; }
     #cluster-btn.active { background: #1a3a5a; color: #8fc0ef; border: 1px solid #5a8fbf; }
     #filmstrip-btn.active { background: #3a1a5a; color: #c08fef; border: 1px solid #8f5abf; }
     #flat-btn.active { background: #1a3a2a; color: #8fefb0; border: 1px solid #5abf80; }
     #order-btn.active { background: #3a2a1a; color: #efb060; border: 1px solid #bf8f3a; }
+    #orphan-btn.active { background: #3a1a1a; color: #ef8f8f; border: 1px solid #bf5a5a; }
     .order-violation-card {
-      background: #2a2a2a; border: 1px solid #444; border-radius: 8px;
+      background: var(--im-bg-card); border: 1px solid var(--im-border); border-radius: 8px;
       padding: 16px; margin-bottom: 16px; max-width: 560px;
     }
     .order-violation-pair { display: flex; flex-direction: column; gap: 8px; margin-bottom: 12px; }
     .order-violation-row { display: flex; align-items: center; gap: 12px; }
     .order-violation-thumb { width: 64px; height: 64px; object-fit: cover; border-radius: 4px; background: #333; flex-shrink: 0; }
-    .order-violation-info { font-size: 0.85rem; color: #ccc; }
+    .order-violation-info { font-size: 0.85rem; color: var(--im-text); }
     .order-violation-info .ts { color: #e07050; font-size: 0.78rem; }
-    .order-violation-arrow { color: #666; font-size: 0.78rem; margin-left: 76px; }
-    .order-violation-suggestion { font-size: 0.82rem; color: #aaa; margin-bottom: 10px; }
+    .order-violation-arrow { color: var(--im-text-dim); font-size: 0.78rem; margin-left: 76px; }
+    .order-violation-suggestion { font-size: 0.82rem; color: var(--im-text-muted); margin-bottom: 10px; }
     .order-violation-actions { display: flex; gap: 8px; }
     .order-violation-actions button { padding: 5px 14px; border-radius: 4px; border: none; cursor: pointer; font-size: 0.82rem; }
     .order-swap-btn { background: #3a5a3a; color: #8fcf8f; }
-    .order-skip-btn { background: #444; color: #aaa; }
+    .order-skip-btn { background: var(--im-btn-bg); color: var(--im-btn-text); }
     .filmstrip-row { margin-bottom: 28px; }
-    .filmstrip-row-header { font-size: 0.85rem; color: #888; margin-bottom: 10px; text-transform: uppercase; letter-spacing: 0.05em; }
+    .filmstrip-row-header { font-size: 0.85rem; color: var(--im-text-muted); margin-bottom: 10px; text-transform: uppercase; letter-spacing: 0.05em; }
     .filmstrip-track { display: flex; gap: 8px; overflow-x: auto; padding-bottom: 6px; }
     .filmstrip-track::-webkit-scrollbar { height: 6px; }
-    .filmstrip-track::-webkit-scrollbar-thumb { background: #444; border-radius: 3px; }
+    .filmstrip-track::-webkit-scrollbar-thumb { background: var(--im-border); border-radius: 3px; }
     .filmstrip-thumb { flex-shrink: 0; cursor: pointer; border-radius: 6px; overflow: hidden; border: 2px solid transparent; }
     .filmstrip-thumb.chain-tip { width: 144px; height: 144px; border-color: #8f5abf; }
     .filmstrip-thumb:not(.chain-tip) { width: 120px; height: 120px; }
@@ -170,103 +299,110 @@
       display: none; padding: 32px 0; text-align: center;
     }
     #cluster-progress progress { width: 60%; height: 10px; accent-color: #5a8fbf; }
-    #cluster-backend-label { font-size: 0.78rem; color: #888; margin-top: 8px; }
+    #cluster-backend-label { font-size: 0.78rem; color: var(--im-text-muted); margin-top: 8px; }
     .gen-badge {
       position: absolute; top: 5px; left: 5px;
       background: rgba(0,0,0,0.6); color: #eee;
       font-size: 0.65rem; font-weight: 700; padding: 1px 5px;
       border-radius: 3px; pointer-events: none;
     }
-    .card.card-selected, .filmstrip-thumb.card-selected { outline: 2px solid #5abf5a; background: #1a2a1a; }
+    .card.card-selected, .filmstrip-thumb.card-selected { outline: 2px solid var(--im-selected-border); background: var(--im-selected-bg); }
     body.picking-parent .card:not(.card-selected), body.picking-parent .filmstrip-thumb:not(.card-selected) { outline: 1px dashed #888; }
     body.picking-parent .card:not(.card-selected):hover, body.picking-parent .filmstrip-thumb:not(.card-selected):hover { outline: 2px solid #aaa; }
-    .ctx-item { padding: 7px 16px; cursor: pointer; font-size: 0.85rem; color: #ddd; white-space: nowrap; }
-    .ctx-item:hover { background: #3a3a3a; }
+    #context-menu { background: var(--im-bg-elevated); border: 1px solid var(--im-border); }
+    .ctx-item { padding: 7px 16px; cursor: pointer; font-size: 0.85rem; color: var(--im-text); white-space: nowrap; }
+    .ctx-item:hover { background: var(--im-bg-card); }
     .ctx-item-danger { color: #ef8080; }
-    .ctx-separator { border-top: 1px solid #444; margin: 4px 0; }
+    .ctx-item-disabled { opacity: 0.4; pointer-events: none; }
+    .ctx-separator { border-top: 1px solid var(--im-border); margin: 4px 0; }
     #selection-bar {
       display: none; position: fixed; bottom: 64px; left: 50%; transform: translateX(-50%);
-      background: #1a2a3a; border: 1px solid #5a8fbf; border-radius: 8px;
-      padding: 12px 18px; z-index: 9998; font-size: 0.85rem; color: #ccc;
-      align-items: center; gap: 12px; box-shadow: 0 4px 20px rgba(0,0,0,0.6);
+      background: var(--im-bg-elevated); border: 1px solid var(--im-border); border-radius: 8px;
+      padding: 12px 18px; z-index: 9998; font-size: 0.85rem; color: var(--im-text);
+      align-items: center; gap: 12px; box-shadow: 0 4px 20px rgba(0,0,0,0.3);
       white-space: nowrap;
     }
     #selection-bar.open { display: flex; }
     #selection-bar button { border: none; padding: 5px 14px; border-radius: 5px; cursor: pointer; font-size: 0.82rem; font-weight: 600; }
-    #selection-link-btn { background: #3a5a8a; color: #9fcfef; }
-    #selection-link-btn:hover { background: #4a6a9a; }
-    #selection-fork-btn { background: #4a3a6a; color: #c09fef; }
-    #selection-fork-btn:hover { background: #5a4a7a; }
-    #selection-delete-btn { background: #6a2a2a; color: #ef9f9f; }
-    #selection-delete-btn:hover { background: #7a3a3a; }
     #move-dialog-backdrop {
       display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.6); z-index: 10000;
       align-items: center; justify-content: center;
     }
     #move-dialog-backdrop.open { display: flex; }
     #move-dialog {
-      background: #222; border: 1px solid #555; border-radius: 10px;
+      background: var(--im-bg-card); border: 1px solid var(--im-border); border-radius: 10px;
       padding: 24px 28px; min-width: 320px; display: flex; flex-direction: column; gap: 14px;
     }
-    #move-dialog h3 { margin: 0; font-size: 1rem; color: #ddd; }
+    #move-dialog h3 { margin: 0; font-size: 1rem; color: var(--im-text); }
     #move-folder-input {
-      background: #111; border: 1px solid #555; border-radius: 5px;
-      color: #ddd; padding: 6px 10px; font-size: 0.9rem; width: 100%;
+      background: var(--im-bg-input); border: 1px solid var(--im-border); border-radius: 5px;
+      color: var(--im-input-text); padding: 6px 10px; font-size: 0.9rem; width: 100%;
     }
     #move-folder-input:focus { outline: none; border-color: #5a8fbf; }
     #move-folder-list { display: flex; flex-direction: column; gap: 4px; max-height: 160px; overflow-y: auto; }
     .move-folder-option {
-      padding: 5px 10px; border-radius: 4px; cursor: pointer; font-size: 0.85rem; color: #aaa;
+      padding: 5px 10px; border-radius: 4px; cursor: pointer; font-size: 0.85rem; color: var(--im-text-muted);
     }
-    .move-folder-option:hover { background: #333; color: #ddd; }
+    .move-folder-option:hover { background: var(--im-bg-elevated); color: var(--im-text); }
     #move-dialog-actions { display: flex; gap: 8px; justify-content: flex-end; }
     #move-dialog-confirm { background: #3a5a8a; color: #9fcfef; border: none; padding: 6px 16px; border-radius: 5px; cursor: pointer; font-weight: 600; }
     #move-dialog-confirm:hover { background: #4a6a9a; }
-    #move-dialog-cancel { background: #444; color: #aaa; border: none; padding: 6px 16px; border-radius: 5px; cursor: pointer; }
-    #move-dialog-cancel:hover { background: #555; }
+    #move-dialog-cancel { background: var(--im-btn-bg); color: var(--im-btn-text); border: none; padding: 6px 16px; border-radius: 5px; cursor: pointer; }
+    #move-dialog-cancel:hover { filter: brightness(1.15); }
     #page-body { display: flex; gap: 0; align-items: flex-start; position: relative; }
     #sidebar {
-      width: 220px; flex-shrink: 0; background: #1e1e1e; border-right: 1px solid #2e2e2e;
+      width: 220px; flex-shrink: 0; background: var(--im-bg-elevated); border-right: 1px solid var(--im-border-dim);
       border-radius: 8px 0 0 8px; margin-right: 16px; transition: width 0.2s, opacity 0.2s, margin 0.2s;
       overflow: hidden;
     }
     #sidebar.collapsed { width: 0; margin-right: 0; opacity: 0; pointer-events: none; }
     #sidebar-header {
       display: flex; justify-content: space-between; align-items: center;
-      padding: 10px 12px; border-bottom: 1px solid #2e2e2e;
+      padding: 10px 12px; border-bottom: 1px solid var(--im-border-dim);
     }
-    #sidebar-header span { font-size: 0.78rem; color: #888; text-transform: uppercase; letter-spacing: 0.05em; }
+    #sidebar-header span { font-size: 0.78rem; color: var(--im-text-muted); text-transform: uppercase; letter-spacing: 0.05em; }
     #sidebar-collapse-btn {
-      background: none; border: none; color: #666; cursor: pointer; font-size: 1rem;
+      background: none; border: none; color: var(--im-text-dim); cursor: pointer; font-size: 1rem;
       padding: 0 2px; line-height: 1;
     }
-    #sidebar-collapse-btn:hover { color: #aaa; }
+    #sidebar-collapse-btn:hover { color: var(--im-text-muted); }
     #sidebar-expand-btn {
-      display: none; background: #2a2a2a; border: 1px solid #3a3a3a; border-radius: 4px;
-      color: #666; cursor: pointer; padding: 4px 8px; font-size: 0.85rem; margin-right: 8px;
+      display: none; background: var(--im-bg-card); border: 1px solid var(--im-border); border-radius: 4px;
+      color: var(--im-text-dim); cursor: pointer; padding: 4px 8px; font-size: 0.85rem; margin-right: 8px;
     }
     #sidebar-expand-btn.visible { display: inline-block; }
-    #sidebar-expand-btn:hover { color: #aaa; }
+    #sidebar-expand-btn:hover { color: var(--im-text-muted); }
     #sidebar-tree { padding: 8px 0; }
     .sidebar-all { padding: 6px 12px; font-size: 0.82rem; color: #7ab0ef; cursor: pointer; display: block; }
     .sidebar-all:hover, .sidebar-all.active { background: #252535; }
-    .sidebar-count { color: #555; font-size: 0.72rem; }
+    .sidebar-count { color: var(--im-text-faint); font-size: 0.72rem; }
     .sidebar-root-name {
-      padding: 4px 12px; font-size: 0.78rem; color: #aaa; cursor: pointer;
+      padding: 4px 12px; font-size: 0.78rem; color: var(--im-text-muted); cursor: pointer;
       display: flex; justify-content: space-between; align-items: center; position: relative;
     }
-    .sidebar-root-name:hover, .sidebar-root-name.active { background: #252535; color: #ddd; }
+    .sidebar-root-name:hover, .sidebar-root-name.active { background: var(--im-bg-card); color: var(--im-text); }
+    .sidebar-folder-label { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
     .sidebar-folder-actions {
-      display: none; gap: 2px; flex-shrink: 0;
+      visibility: hidden; display: flex; gap: 2px; flex-shrink: 0;
     }
-    .sidebar-root-name:hover .sidebar-folder-actions { display: flex; }
+    .sidebar-root-name:hover .sidebar-folder-actions { visibility: visible; }
     .sidebar-folder-actions button {
-      background: none; border: none; color: #888; cursor: pointer; padding: 1px 4px;
+      background: none; border: none; color: var(--im-text-muted); cursor: pointer; padding: 1px 4px;
       font-size: 0.72rem; border-radius: 3px;
     }
-    .sidebar-folder-actions button:hover { color: #ddd; background: #333; }
+    .sidebar-folder-actions button:hover { color: var(--im-text); background: var(--im-bg-card); }
+    .sidebar-group {
+      padding: 4px 12px; font-size: 0.78rem; color: var(--im-text-dim); cursor: pointer;
+      display: flex; justify-content: space-between; align-items: center; user-select: none;
+    }
+    .sidebar-group:hover { background: var(--im-bg-subtle); color: var(--im-text-muted); }
+    .sidebar-group:hover .sidebar-folder-actions { visibility: visible; }
+    .sidebar-group-children { overflow: hidden; }
+    .sidebar-group-children.collapsed { display: none; }
+    .sidebar-group-chevron { display: inline-block; transition: transform 0.15s; font-size: 0.65rem; }
+    .sidebar-group.open .sidebar-group-chevron { transform: rotate(90deg); }
     .sidebar-rename-input {
-      background: #1a1a2e; border: 1px solid #555; color: #ddd; border-radius: 4px;
+      background: var(--im-bg-input); border: 1px solid var(--im-input-border); color: var(--im-input-text); border-radius: 4px;
       font-size: 0.78rem; padding: 2px 6px; width: 100%; box-sizing: border-box;
     }
     .sidebar-rename-error { color: #e06c75; font-size: 0.7rem; padding: 2px 12px; }
@@ -276,7 +412,7 @@
     }
     #delete-folder-dialog.open { display: flex; }
     #delete-folder-dialog-inner {
-      background: #2a2a2a; border-radius: 10px; padding: 24px; width: 360px;
+      background: var(--im-bg-card); border-radius: 10px; padding: 24px; width: 360px;
       box-shadow: 0 8px 32px rgba(0,0,0,0.6);
     }
     #main-area { flex: 1; min-width: 0; }
@@ -287,30 +423,65 @@
     }
     #fork-dialog.open { display: flex; }
     #fork-dialog-inner {
-      background: #2a2a2a; border-radius: 10px; padding: 24px; width: 360px;
+      background: var(--im-bg-card); border-radius: 10px; padding: 24px; width: 360px;
       box-shadow: 0 8px 32px rgba(0,0,0,0.6);
     }
-    #fork-dialog-inner h3 { font-size: 1rem; margin-bottom: 16px; color: #e0e0e0; }
+    #fork-dialog-inner h3 { font-size: 1rem; margin-bottom: 16px; color: var(--im-text); }
     #fork-folder-input {
-      width: 100%; background: #1e1e1e; border: 1px solid #444; color: #e0e0e0;
+      width: 100%; background: var(--im-bg-input); border: 1px solid var(--im-border); color: var(--im-input-text);
       padding: 8px 10px; border-radius: 5px; font-size: 0.9rem; margin-bottom: 8px;
     }
-    #fork-folder-input:focus { outline: none; border-color: #666; }
+    #fork-folder-input:focus { outline: none; border-color: var(--im-text-dim); }
     #fork-dialog-error { color: #e07070; font-size: 0.8rem; min-height: 1.2em; margin-bottom: 10px; }
     #fork-dialog-btns { display: flex; gap: 8px; }
     #fork-dialog-btns button { flex: 1; padding: 8px; border: none; border-radius: 5px; cursor: pointer; font-size: 0.85rem; font-weight: 600; }
     #fork-ok-btn { background: #3a5a7a; color: #8fc0ef; }
     #fork-ok-btn:hover:not(:disabled) { background: #4a6a8a; }
     #fork-ok-btn:disabled { opacity: 0.5; cursor: default; }
-    #fork-cancel-btn { background: #444; color: #aaa; }
-    #fork-cancel-btn:hover { background: #555; }
+    #fork-cancel-btn { background: var(--im-btn-bg); color: var(--im-btn-text); }
+    #fork-cancel-btn:hover { filter: brightness(1.15); }
     .tree-node-cross { border: 2px dashed #5a7a5a; border-radius: 6px; padding: 6px 10px; cursor: pointer; opacity: 0.85; }
     .tree-node-cross:hover { opacity: 1; background: #252a25; }
     .tree-cross-label { font-size: 0.7rem; color: #8fcf8f; margin-bottom: 4px; }
-    #toast { position:fixed; bottom:32px; left:50%; transform:translateX(-50%); background:#2a2a2a; color:#e0e0e0; padding:10px 20px; border-radius:6px; font-size:0.85rem; pointer-events:none; opacity:0; transition:opacity 0.2s; z-index:9999; border:1px solid #444; }
+    #toast { position:fixed; bottom:32px; left:50%; transform:translateX(-50%); background:var(--im-bg-card); color:var(--im-text); padding:10px 20px; border-radius:6px; font-size:0.85rem; pointer-events:none; opacity:0; transition:opacity 0.2s; z-index:9999; border:1px solid var(--im-border); }
     #toast.visible { opacity:1; }
     #toast.error { color:#ef8080; border-color:#7a3a3a; }
     #toast.success { color:#8fcf8f; border-color:#3a7a3a; }
+    /* Tree port drag */
+    .port-parent { fill: #5a8fbf; cursor: crosshair; }
+    .port-parent:hover { fill: #7aafdf; }
+    .port-child { fill: #bf8f3a; cursor: crosshair; }
+    .port-child:hover { fill: #dfaf5a; }
+    .drag-invalid rect { stroke: #ef4444 !important; stroke-width: 2 !important; }
+    .drag-invalid { opacity: 0.5; }
+    .drag-valid rect { stroke: #5fcf7f !important; stroke-width: 2.5 !important; }
+    #tree-toast {
+      display: none; position: absolute; bottom: 16px; left: 50%; transform: translateX(-50%);
+      background: var(--im-bg-card); border: 1px solid var(--im-border); color: var(--im-text); padding: 8px 16px;
+      border-radius: 6px; font-size: 0.82rem; align-items: center; gap: 10px; z-index: 10;
+      white-space: nowrap;
+    }
+    #tree-toast.error { border-color: #7a3a3a; color: #ef8080; }
+    #tree-toast-undo { background: var(--im-btn-bg); border: none; color: var(--im-btn-text); padding: 4px 10px; border-radius: 4px; cursor: pointer; font-size: 0.8rem; }
+    #tree-toast-undo:hover { filter: brightness(1.15); }
+    #tree-reparent-confirm {
+      display: none; position: absolute; inset: 0; background: rgba(0,0,0,0.6);
+      align-items: center; justify-content: center; z-index: 20;
+    }
+    #tree-reparent-confirm-inner {
+      background: var(--im-bg-card); border: 1px solid var(--im-border); border-radius: 8px; padding: 20px 24px;
+      display: flex; flex-direction: column; gap: 14px; min-width: 260px;
+    }
+    #tree-reparent-msg { font-size: 0.88rem; color: var(--im-text); }
+    #tree-reparent-confirm-inner button { padding: 7px 16px; border: none; border-radius: 5px; cursor: pointer; font-size: 0.83rem; font-weight: 600; }
+    #tree-reparent-confirm-inner .confirm-yes { background: #3a5a8a; color: #9fcfef; }
+    #tree-reparent-confirm-inner .confirm-yes:hover { background: #4a6a9a; }
+    #tree-reparent-confirm-inner .confirm-no { background: var(--im-btn-bg); color: var(--im-btn-text); }
+    #tree-reparent-confirm-inner .confirm-no:hover { filter: brightness(1.15); }
+
+    /* Display settings */
+    body.hide-gen-badges .gen-badge { display: none; }
+    body.hide-chain-color .card { border: 2px solid #444 !important; }
   </style>
 </head>
 <body>
@@ -320,38 +491,36 @@
     <div style="display:flex;gap:8px;align-items:center;">
       <button id="sidebar-expand-btn" onclick="toggleSidebar()" title="Expand sidebar">›</button>
       <button id="import-drawer-btn" onclick="openDrawer()">Import Folder</button>
-      <button id="flat-btn" onclick="toggleFlatMode()"
-        style="background:#444;border:none;color:#ddd;padding:6px 14px;border-radius:5px;cursor:pointer;font-size:0.85rem">
-        Flat
-      </button>
-      <button id="filmstrip-btn" onclick="toggleFilmstripMode()"
-        style="background:#444;border:none;color:#ddd;padding:6px 14px;border-radius:5px;cursor:pointer;font-size:0.85rem">
-        Filmstrip
-      </button>
-      <button id="cluster-btn" onclick="toggleClusterMode()"
-        style="background:#444;border:none;color:#ddd;padding:6px 14px;border-radius:5px;cursor:pointer;font-size:0.85rem">
-        Cluster
-      </button>
-      <button id="order-btn" onclick="toggleOrderMode()"
-        style="background:#444;border:none;color:#ddd;padding:6px 14px;border-radius:5px;cursor:pointer;font-size:0.85rem">
-        Order
-      </button>
-      <button id="link-btn" onclick="enterPickParentPhase()"
-        style="background:#444;border:none;color:#ddd;padding:6px 14px;border-radius:5px;cursor:pointer;font-size:0.85rem">
-        Link
-      </button>
-      <button onclick="rebuildIndex()"
-        style="background:#444;border:none;color:#ddd;padding:6px 14px;border-radius:5px;cursor:pointer;font-size:0.85rem">
-        Rebuild Index
-      </button>
+      <button id="flat-btn" class="toolbar-btn" onclick="toggleFlatMode()">Flat</button>
+      <select id="sort-select" class="toolbar-select" style="display:none">
+        <option value="date-desc">Date ↓</option>
+        <option value="date-asc">Date ↑</option>
+        <option value="name-asc">Name A→Z</option>
+        <option value="name-desc">Name Z→A</option>
+        <option value="gen-asc">Gen ↑</option>
+        <option value="gen-desc">Gen ↓</option>
+      </select>
+      <button id="filmstrip-btn" class="toolbar-btn" onclick="toggleFilmstripMode()">Filmstrip</button>
+      <button id="cluster-btn" class="toolbar-btn" onclick="toggleClusterMode()">Cluster</button>
+      <button id="order-btn" class="toolbar-btn" onclick="toggleOrderMode()">Order</button>
+      <button id="orphan-btn" class="toolbar-btn" onclick="toggleOrphanMode()">Orphans</button>
+      <button id="link-btn" class="toolbar-btn" onclick="enterPickParentPhase()">Link</button>
+      <button class="toolbar-btn" onclick="rebuildIndex()">Rebuild Index</button>
+      <div style="position:relative;display:inline-flex;align-items:center;">
+        <input id="search-input" class="toolbar-input" type="text" placeholder="Search…"
+          style="padding-right:28px;">
+        <button id="search-clear-btn"
+          style="display:none;position:absolute;right:6px;background:none;border:none;color:#888;cursor:pointer;font-size:0.9rem;line-height:1;padding:0;"
+          title="Clear search">✕</button>
+      </div>
       <button id="settings-btn" onclick="openSettings()" title="Settings">⚙</button>
     </div>
   </div>
 
-  <!-- Drop zone -->
-  <div id="drop-zone"
-    style="border:2px dashed #555;border-radius:8px;padding:20px;text-align:center;color:#777;margin-bottom:24px;transition:border-color 0.15s;">
-    Drop images here to import
+  <div id="drop-overlay">
+    <div id="drop-overlay-inner">
+      <div id="drop-overlay-text">⬇ Drop images to import</div>
+    </div>
   </div>
 
   <div id="page-body">
@@ -375,7 +544,9 @@
   <div id="lightbox" onclick="if(event.target===this)closeLightbox()">
     <div id="lb-inner">
       <div id="lb-image-area">
+        <button id="lb-nav-prev" class="lb-nav-btn" onclick="lbNavigate(-1)" title="Previous">&#8249;</button>
         <img id="lightbox-img" src="" alt="">
+        <button id="lb-nav-next" class="lb-nav-btn" onclick="lbNavigate(1)" title="Next">&#8250;</button>
       </div>
       <div id="lb-panel">
         <div id="lb-panel-content"></div>
@@ -394,13 +565,31 @@
   </div>
 
   <!-- Tree panel -->
-  <div id="tree-overlay" onclick="if(event.target===this)closeTree()" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.7);z-index:100;overflow:auto;padding:24px;">
-    <div style="max-width:900px;margin:0 auto;background:#2a2a2a;border-radius:10px;padding:24px;">
-      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
+  <div id="tree-overlay" onclick="if(event.target===this)closeTree()" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.7);z-index:100;align-items:center;justify-content:center;">
+    <div style="width:min(95vw,1400px);height:90vh;background:var(--im-bg-card);border-radius:10px;display:flex;flex-direction:column;overflow:hidden;position:relative;">
+      <div style="display:flex;justify-content:space-between;align-items:center;padding:16px 20px;border-bottom:1px solid var(--im-border-sub);flex-shrink:0;">
         <h2 id="tree-title" style="font-size:1.1rem"></h2>
-        <button onclick="closeTree()" style="background:none;border:none;color:#aaa;font-size:1.4rem;cursor:pointer">✕</button>
+        <div style="display:flex;align-items:center;gap:8px;">
+          <button id="tree-reset-view" onclick="_resetTreeView()" class="toolbar-btn" style="font-size:0.8rem;padding:4px 10px;">Reset view</button>
+          <button onclick="closeTree()" style="background:none;border:none;color:var(--im-text-muted);font-size:1.4rem;cursor:pointer">✕</button>
+        </div>
       </div>
-      <div id="tree-content"></div>
+      <div style="position:relative;flex:1;display:flex;flex-direction:column;overflow:hidden;">
+        <svg id="tree-svg" style="flex:1;width:100%;display:block;overflow:hidden;"></svg>
+        <div id="tree-toast">
+          <span id="tree-toast-msg"></span>
+          <button id="tree-toast-undo" onclick="_treeUndoFn && _treeUndoFn()">Undo</button>
+        </div>
+        <div id="tree-reparent-confirm">
+          <div id="tree-reparent-confirm-inner">
+            <p id="tree-reparent-msg"></p>
+            <div style="display:flex;gap:8px;justify-content:flex-end">
+              <button class="confirm-yes" onclick="_treeConfirmYes && _treeConfirmYes()">Reassign</button>
+              <button class="confirm-no" onclick="_treeConfirmNo && _treeConfirmNo()">Cancel</button>
+            </div>
+          </div>
+        </div>
+      </div>
     </div>
   </div>
 
@@ -421,15 +610,15 @@
   <!-- Delete folder confirmation dialog -->
   <div id="delete-folder-dialog" onclick="if(event.target===this)closeDeleteFolderDialog()">
     <div id="delete-folder-dialog-inner">
-      <h3 style="margin:0 0 12px;font-size:1rem;color:#e0e0e0;">Delete Folder</h3>
-      <p id="delete-folder-msg" style="margin:0 0 16px;color:#aaa;font-size:0.85rem;"></p>
+      <h3 style="margin:0 0 12px;font-size:1rem;">Delete Folder</h3>
+      <p id="delete-folder-msg" style="margin:0 0 16px;color:var(--im-text-muted);font-size:0.85rem;"></p>
       <div style="display:flex;gap:8px;justify-content:flex-end;">
         <button onclick="confirmDeleteFolder()"
           style="background:#8a3a3a;color:#efbfbf;border:none;padding:6px 16px;border-radius:5px;cursor:pointer;font-weight:600;">
           Delete
         </button>
         <button onclick="closeDeleteFolderDialog()"
-          style="background:#444;color:#aaa;border:none;padding:6px 16px;border-radius:5px;cursor:pointer;">
+          class="toolbar-btn" style="padding:6px 16px;">
           Cancel
         </button>
       </div>
@@ -438,10 +627,6 @@
 
   <!-- Selection bar (always-on; visible when ≥1 card selected) -->
   <div id="selection-bar">
-    <span id="selection-count">0 selected</span>
-    <button id="selection-link-btn" onclick="enterPickParentPhase()">Link</button>
-    <button id="selection-fork-btn">Fork</button>
-    <button id="selection-delete-btn">Delete</button>
     <span id="pick-parent-message" style="display:none">Click a parent image — Esc to cancel</span>
     <button id="pick-parent-cancel-btn" style="display:none" onclick="cancelPickParentPhase()">Cancel</button>
     <span id="pick-parent-confirm" style="display:none">
@@ -465,13 +650,15 @@
   </div>
 
   <!-- Context menu -->
-  <div id="context-menu" style="display:none;position:fixed;z-index:8000;background:#2a2a2a;border:1px solid #555;border-radius:6px;padding:4px 0;min-width:160px;box-shadow:0 4px 16px rgba(0,0,0,0.5)">
+  <div id="context-menu" style="display:none;position:fixed;z-index:8000;border-radius:6px;padding:4px 0;min-width:160px;box-shadow:0 4px 16px rgba(0,0,0,0.5)">
     <div class="ctx-item" onclick="_ctxOpen()">Open</div>
     <div class="ctx-item" onclick="_ctxLink()">Link selected to…</div>
     <div class="ctx-item" onclick="_ctxSendToComfy()">Send to Comfy</div>
     <div class="ctx-item" onclick="_ctxFork()">Fork chain</div>
+    <div class="ctx-item" onclick="_ctxMove()">Move to folder</div>
+    <div class="ctx-item" id="ctx-unlink-item" onclick="_ctxUnlinkParent()">Unlink parent</div>
     <div class="ctx-separator"></div>
-    <div class="ctx-item ctx-item-danger" onclick="_ctxDelete()">Delete</div>
+    <div class="ctx-item ctx-item-danger" onclick="_deleteSelected()">Delete</div>
     <div class="ctx-item" onclick="_ctxCopyUUID()">Copy UUID</div>
   </div>
 
@@ -513,6 +700,30 @@
           </div>
         </div>
       </div>
+      <div>
+        <div class="settings-section-title">Display</div>
+        <div class="settings-row" style="margin-bottom:12px">
+          <label style="flex-direction:row;justify-content:space-between;align-items:center">
+            Hide generation badges
+            <input type="checkbox" id="settings-hide-gen-badges">
+          </label>
+          <div class="settings-hint">Hides the Gn badge in the corner of each card.</div>
+        </div>
+        <div class="settings-row" style="margin-bottom:12px">
+          <label style="flex-direction:row;justify-content:space-between;align-items:center">
+            Hide chain coloring
+            <input type="checkbox" id="settings-hide-chain-color">
+          </label>
+          <div class="settings-hint">Replaces the chain-color border with a neutral one.</div>
+        </div>
+        <div class="settings-row">
+          <label style="flex-direction:row;justify-content:space-between;align-items:center">
+            Light theme
+            <input type="checkbox" id="settings-light-theme">
+          </label>
+          <div class="settings-hint">Switches the page to a light color palette.</div>
+        </div>
+      </div>
     </div>
   </div>
 
@@ -530,7 +741,7 @@
       <div id="import-drawer-warning">
         ⚠ Files will be <strong>moved</strong> into the managed folder. The source folder will be emptied. This cannot be undone.
       </div>
-      <div id="import-drawer-log"><span style="color:#555">Import log will appear here…</span></div>
+      <div id="import-drawer-log"><span style="color:var(--im-text-faint)">Import log will appear here…</span></div>
     </div>
     <div id="import-drawer-footer">
       <button id="import-drawer-go" onclick="startImport()">Move &amp; Import</button>
@@ -539,6 +750,14 @@
   </div>
 
   <script>
+    // Apply display settings immediately to avoid flash
+    if (localStorage.getItem('imageManager.hideGenBadges') === 'true')
+      document.body.classList.add('hide-gen-badges');
+    if (localStorage.getItem('imageManager.hideChainColor') === 'true')
+      document.body.classList.add('hide-chain-color');
+    if (localStorage.getItem('imageManager.lightTheme') === 'true')
+      document.body.classList.add('light-theme');
+
     let _toastTimer = null;
     function showToast(msg, isError = false) {
       const t = document.getElementById('toast');
@@ -551,15 +770,10 @@
     }
 
     function sendToComfy(uuid, btn) {
-      if (!(window.parent && window.parent !== window)) {
-        showToast('Open Image Manager inside ComfyUI to use this feature.', true);
-        return;
-      }
       if (btn) { btn.disabled = true; btn.textContent = 'Sending…'; }
-      fetch(`/image-manager/api/workflow/${uuid}`)
+      fetch(`/image-manager/api/send-to-comfy/${uuid}`, { method: 'POST' })
         .then(r => { if (!r.ok) throw new Error('fetch failed'); return r.json(); })
-        .then(workflow => {
-          window.parent.postMessage({type: 'loadWorkflow', workflow}, '*');
+        .then(() => {
           showToast('Loaded in ComfyUI ✓');
         })
         .catch(() => {
@@ -570,66 +784,520 @@
         });
     }
 
-    function renderTreeNode(node, depth = 0) {
-      const indent = depth * 20;
-      const gen = node.generation !== undefined ? node.generation : depth;
+    const SVG_NS = 'http://www.w3.org/2000/svg';
+    const NODE_W = 90, NODE_H = 84, H_GAP = 20, V_GAP = 100;
 
-      if (node.cross_chain) {
-        return `
-          <div style="margin-left:${indent}px;margin-bottom:12px;" class="tree-node-cross"
-               onclick="openTree('${node.uuid}','${escHtml(node.root_name)}')">
-            <div class="tree-cross-label">→ ${escHtml(node.root_name)}</div>
-            <div style="display:flex;align-items:center;gap:12px;">
-              <img src="/image-manager/api/image/${node.uuid}" style="width:48px;height:48px;object-fit:cover;border-radius:4px;background:#333;">
-              <div>
-                <div style="font-size:0.7rem;color:#666;margin-bottom:2px">Gen ${gen} · forked</div>
-                <div style="font-size:0.85rem">${node.filename.split('/').pop()}</div>
-                <div style="font-size:0.72rem;color:#888">click to view chain</div>
-              </div>
-            </div>
-          </div>
-        `;
-      }
+    window._treePanX = 0;
+    window._treePanY = 0;
+    window._treeScale = 1;
+    window._treeCollapsed = new Set();
+    let _treeCurrentData = null;
+    let _treeNodeMap = {};
+    let _portDrag = null;
+    let _treeUndoFn = null;
+    let _treeConfirmYes = null;
+    let _treeConfirmNo = null;
+    window._treeUndoCalls = 0;
 
-      return `
-        <div style="margin-left:${indent}px;margin-bottom:12px;display:flex;align-items:center;gap:12px;">
-          <img src="/image-manager/api/image/${node.uuid}" style="width:64px;height:64px;object-fit:cover;border-radius:4px;background:#333;">
-          <div>
-            <div style="font-size:0.7rem;color:#666;margin-bottom:2px">Gen ${gen}</div>
-            <div style="font-size:0.85rem">${node.filename.split('/').pop()}</div>
-            <div style="font-size:0.75rem;color:#888">${node.created_at.slice(0,10)}</div>
-            <div style="display:flex;gap:6px;margin-top:4px;">
-              <button onclick="sendToComfy('${node.uuid}',this)"
-                style="font-size:0.75rem;background:#444;border:none;color:#ddd;padding:2px 8px;border-radius:3px;cursor:pointer">
-                Send to Comfy
-              </button>
-              <button onclick="openForkDialog('${node.uuid}')"
-                style="font-size:0.75rem;background:#2a3a4a;border:none;color:#8fc0ef;padding:2px 8px;border-radius:3px;cursor:pointer">
-                Fork…
-              </button>
-            </div>
-          </div>
-        </div>
-        ${(node.children || []).map(c => renderTreeNode(c, depth + 1)).join('')}
-      `;
+    function _applyTreeTransform() {
+      const vp = document.getElementById('tree-viewport');
+      if (vp) vp.setAttribute('transform', `translate(${window._treePanX},${window._treePanY}) scale(${window._treeScale})`);
     }
 
-    let _currentTreeRootUuid = null, _currentTreeRootName = null;
+    function _resetTreeView() {
+      window._treePanX = 0;
+      window._treePanY = 0;
+      window._treeScale = 1;
+      _applyTreeTransform();
+    }
 
-    async function openTree(rootUuid, rootName) {
+    function _initTreePanZoom(svg) {
+      if (svg._panZoomInit) return;
+      svg._panZoomInit = true;
+      let dragging = false, lastX = 0, lastY = 0;
+
+      svg.addEventListener('pointerdown', e => {
+        if (e.target !== svg && e.target.id !== 'tree-viewport') return;
+        dragging = true;
+        lastX = e.clientX;
+        lastY = e.clientY;
+        svg.setPointerCapture(e.pointerId);
+        e.preventDefault();
+      });
+
+      svg.addEventListener('pointermove', e => {
+        if (!dragging) return;
+        window._treePanX += e.clientX - lastX;
+        window._treePanY += e.clientY - lastY;
+        lastX = e.clientX;
+        lastY = e.clientY;
+        _applyTreeTransform();
+      });
+
+      svg.addEventListener('pointerup', () => { dragging = false; });
+      svg.addEventListener('pointercancel', () => { dragging = false; });
+
+      svg.addEventListener('wheel', e => {
+        e.preventDefault();
+        const factor = e.deltaY < 0 ? 1.1 : 0.9;
+        const newScale = Math.min(4.0, Math.max(0.2, window._treeScale * factor));
+        const rect = svg.getBoundingClientRect();
+        const mx = e.clientX - rect.left;
+        const my = e.clientY - rect.top;
+        window._treePanX = mx - (mx - window._treePanX) * (newScale / window._treeScale);
+        window._treePanY = my - (my - window._treePanY) * (newScale / window._treeScale);
+        window._treeScale = newScale;
+        _applyTreeTransform();
+      }, { passive: false });
+    }
+
+    function countDescendants(node) {
+      return (node.children || []).reduce((sum, c) => sum + 1 + countDescendants(c), 0);
+    }
+
+    function layoutTree(root) {
+      const nodes = [];
+      const edges = [];
+
+      function computeSubtreeWidth(node) {
+        if (window._treeCollapsed.has(node.uuid)) {
+          node._subtreeWidth = NODE_W;
+          return NODE_W;
+        }
+        const children = node.children || [];
+        if (children.length === 0) return NODE_W;
+        const childWidths = children.map(computeSubtreeWidth);
+        const total = childWidths.reduce((a, b) => a + b, 0) + H_GAP * (children.length - 1);
+        node._subtreeWidth = Math.max(NODE_W, total);
+        return node._subtreeWidth;
+      }
+
+      function place(node, x, y) {
+        nodes.push({ node, x, y });
+        if (window._treeCollapsed.has(node.uuid)) return;
+        const children = node.children || [];
+        if (children.length === 0) return;
+        const totalWidth = children.map(c => c._subtreeWidth || NODE_W).reduce((a, b) => a + b, 0) + H_GAP * (children.length - 1);
+        let cx = x - totalWidth / 2;
+        for (const child of children) {
+          const cw = child._subtreeWidth || NODE_W;
+          const childX = cx + cw / 2;
+          const childY = y + V_GAP;
+          edges.push({ x1: x, y1: y + NODE_H / 2, x2: childX, y2: childY - NODE_H / 2 });
+          place(child, childX, childY);
+          cx += cw + H_GAP;
+        }
+      }
+
+      computeSubtreeWidth(root);
+      const rootWidth = root._subtreeWidth || NODE_W;
+      place(root, rootWidth / 2, NODE_H / 2 + 10);
+      return { nodes, edges };
+    }
+
+    function renderSVGTree(data, entryUuid) {
+      _treeCurrentData = data;
+      _treeNodeMap = {};
+      _buildTreeNodeMap(data);
+      const _cs = getComputedStyle(document.body);
+      const _clr = (v) => _cs.getPropertyValue(v).trim();
+      const svg = document.getElementById('tree-svg');
+      while (svg.firstChild) svg.removeChild(svg.firstChild);
+
+      svg.removeAttribute('viewBox');
+      svg.style.width = '100%';
+      svg.style.cursor = 'grab';
+
+      const vp = document.createElementNS(SVG_NS, 'g');
+      vp.setAttribute('id', 'tree-viewport');
+      _applyTreeTransform();
+      svg.appendChild(vp);
+
+      const { nodes, edges } = layoutTree(data);
+
+      const edgesByParent = new Map();
+      for (const { x1, y1, x2, y2 } of edges) {
+        const key = `${x1},${y1}`;
+        if (!edgesByParent.has(key)) edgesByParent.set(key, []);
+        edgesByParent.get(key).push({ cx: x2, cy: y2 });
+      }
+      for (const [key, children] of edgesByParent) {
+        const [px, py] = key.split(',').map(Number);
+        const cy = children[0].cy;
+        const midY = (py + cy) / 2;
+        const cxs = children.map(c => c.cx);
+        const minCX = Math.min(...cxs);
+        const maxCX = Math.max(...cxs);
+        const addLine = (x1, y1, x2, y2) => {
+          const ln = document.createElementNS(SVG_NS, 'line');
+          ln.setAttribute('x1', x1); ln.setAttribute('y1', y1);
+          ln.setAttribute('x2', x2); ln.setAttribute('y2', y2);
+          ln.setAttribute('stroke', _clr('--im-border')); ln.setAttribute('stroke-width', '1.5');
+          vp.appendChild(ln);
+        };
+        addLine(px, py, px, midY);
+        if (children.length > 1) addLine(minCX, midY, maxCX, midY);
+        for (const { cx } of children) addLine(cx, midY, cx, cy);
+      }
+
+      for (const { node, x, y } of nodes) {
+        const g = document.createElementNS(SVG_NS, 'g');
+        g.setAttribute('class', 'tree-node');
+        g.setAttribute('transform', `translate(${x - NODE_W / 2}, ${y - NODE_H / 2})`);
+        g.dataset.uuid = node.uuid;
+
+        const rect = document.createElementNS(SVG_NS, 'rect');
+        rect.setAttribute('width', NODE_W); rect.setAttribute('height', NODE_H);
+        rect.setAttribute('rx', '4'); rect.setAttribute('fill', _clr('--im-bg-elevated'));
+        rect.setAttribute('stroke', node.cross_chain ? '#8fc0ef' : _clr('--im-border'));
+        rect.setAttribute('stroke-width', '1.5');
+        if (node.cross_chain) rect.setAttribute('stroke-dasharray', '4');
+        if (node.uuid === entryUuid) {
+          rect.setAttribute('stroke', _clr('--im-text'));
+          rect.setAttribute('stroke-width', '2.5');
+        }
+        g.appendChild(rect);
+
+        const img = document.createElementNS(SVG_NS, 'image');
+        img.setAttribute('href', `/image-manager/api/image/${node.uuid}`);
+        img.setAttribute('x', (NODE_W - 64) / 2); img.setAttribute('y', '4');
+        img.setAttribute('width', '64'); img.setAttribute('height', '64');
+        img.style.cursor = 'pointer';
+        g.appendChild(img);
+
+        const fname = (node.filename || '').split('/').pop().replace(/\.[^.]+$/, '');
+        const nameText = document.createElementNS(SVG_NS, 'text');
+        nameText.setAttribute('x', NODE_W / 2); nameText.setAttribute('y', NODE_H - 7);
+        nameText.setAttribute('text-anchor', 'middle');
+        nameText.setAttribute('fill', _clr('--im-text-muted')); nameText.setAttribute('font-size', '10');
+        const maxLen = 10;
+        nameText.textContent = fname.length > maxLen ? fname.slice(0, maxLen) + '…' : fname;
+        g.appendChild(nameText);
+
+        const hasChildren = (node.children || []).length > 0;
+        if (node.cross_chain) {
+          g.style.opacity = '0.55';
+          g.style.cursor = 'pointer';
+          g.onclick = () => openTree(node.uuid, node.root_name);
+        } else {
+          img.onclick = (e) => { e._imgClick = true; openLightbox(node.uuid, node.filename); };
+          const titleEl = document.createElementNS(SVG_NS, 'title');
+          titleEl.textContent = node.filename;
+          g.appendChild(titleEl);
+        }
+
+        if (hasChildren && !node.cross_chain) {
+          g.style.cursor = 'pointer';
+          g.onclick = (e) => {
+            if (e._imgClick) return;
+            if (window._treeCollapsed.has(node.uuid)) {
+              window._treeCollapsed.delete(node.uuid);
+            } else {
+              window._treeCollapsed.add(node.uuid);
+            }
+            renderSVGTree(_treeCurrentData, _currentTreeEntryUuid);
+          };
+        }
+
+        if (window._treeCollapsed.has(node.uuid)) {
+          const hiddenCount = countDescendants(node);
+          const badge = document.createElementNS(SVG_NS, 'text');
+          badge.setAttribute('class', 'collapse-badge');
+          badge.setAttribute('x', NODE_W - 4);
+          badge.setAttribute('y', 14);
+          badge.setAttribute('text-anchor', 'end');
+          badge.setAttribute('fill', '#f0a');
+          badge.setAttribute('font-size', '11');
+          badge.setAttribute('font-weight', 'bold');
+          badge.textContent = `+${hiddenCount}`;
+          g.appendChild(badge);
+        }
+
+        // Parent port: non-root, non-cross-chain nodes (top-center)
+        if (!node.cross_chain && node.generation > 0) {
+          const pp = document.createElementNS(SVG_NS, 'circle');
+          pp.setAttribute('class', 'port-parent');
+          pp.setAttribute('cx', NODE_W / 2);
+          pp.setAttribute('cy', 0);
+          pp.setAttribute('r', 6);
+          g.appendChild(pp);
+          _attachPortDrag(pp, 'parent', node.uuid, node.parent_uuid, node.children);
+        }
+
+        // Child port: non-cross-chain nodes that have same-chain children (bottom-center)
+        const sameChainKids = (node.children || []).filter(c => !c.cross_chain);
+        if (!node.cross_chain && sameChainKids.length > 0) {
+          const cp = document.createElementNS(SVG_NS, 'circle');
+          cp.setAttribute('class', 'port-child');
+          cp.setAttribute('cx', NODE_W / 2);
+          cp.setAttribute('cy', NODE_H);
+          cp.setAttribute('r', 6);
+          g.appendChild(cp);
+          _attachPortDrag(cp, 'child', node.uuid, node.parent_uuid, node.children);
+        }
+
+        vp.appendChild(g);
+      }
+
+      // Ghost edge for cross-chain root (forked chain whose root has a cross-chain parent)
+      if (data.parent_uuid && nodes.length > 0) {
+        const rootPos = nodes[0];
+        const GHOST_H = 70;
+        const rx = rootPos.x;
+        const ry = rootPos.y - NODE_H / 2;
+
+        const gradId = 'ghostEdgeGrad_' + data.uuid;
+        const defs = document.createElementNS(SVG_NS, 'defs');
+        const grad = document.createElementNS(SVG_NS, 'linearGradient');
+        grad.setAttribute('id', gradId);
+        grad.setAttribute('gradientUnits', 'userSpaceOnUse');
+        grad.setAttribute('x1', rx); grad.setAttribute('y1', ry - GHOST_H);
+        grad.setAttribute('x2', rx); grad.setAttribute('y2', ry);
+        const s1 = document.createElementNS(SVG_NS, 'stop');
+        s1.setAttribute('offset', '0%'); s1.setAttribute('stop-color', _clr('--im-text-muted')); s1.setAttribute('stop-opacity', '0');
+        const s2 = document.createElementNS(SVG_NS, 'stop');
+        s2.setAttribute('offset', '100%'); s2.setAttribute('stop-color', _clr('--im-text-muted')); s2.setAttribute('stop-opacity', '0.6');
+        grad.appendChild(s1); grad.appendChild(s2);
+        defs.appendChild(grad);
+        vp.appendChild(defs);
+
+        const ghost = document.createElementNS(SVG_NS, 'line');
+        ghost.setAttribute('class', 'ghost-edge');
+        ghost.setAttribute('x1', rx); ghost.setAttribute('y1', ry);
+        ghost.setAttribute('x2', rx); ghost.setAttribute('y2', ry - GHOST_H);
+        ghost.setAttribute('stroke', `url(#${gradId})`);
+        ghost.setAttribute('stroke-width', '2');
+        ghost.setAttribute('stroke-dasharray', '5,3');
+        ghost.setAttribute('pointer-events', 'none');
+        vp.appendChild(ghost);
+
+        const thumb = document.createElementNS(SVG_NS, 'image');
+        thumb.setAttribute('href', `/image-manager/api/image/${data.parent_uuid}`);
+        thumb.setAttribute('x', rx - 20); thumb.setAttribute('y', ry - GHOST_H - 40);
+        thumb.setAttribute('width', '40'); thumb.setAttribute('height', '40');
+        thumb.style.opacity = '0.5';
+        thumb.setAttribute('pointer-events', 'none');
+        vp.appendChild(thumb);
+      }
+
+      _initTreePanZoom(svg);
+    }
+
+    let _currentTreeRootUuid = null, _currentTreeRootName = null, _currentTreeEntryUuid = null;
+
+    async function openTree(rootUuid, rootName, entryUuid) {
       _currentTreeRootUuid = rootUuid;
       _currentTreeRootName = rootName;
+      _currentTreeEntryUuid = entryUuid || null;
+      window._treeCollapsed = new Set();
+      _resetTreeView();
       document.getElementById('tree-title').textContent = rootName;
-      document.getElementById('tree-content').innerHTML = 'Loading...';
-      document.getElementById('tree-overlay').style.display = 'block';
+      const svg = document.getElementById('tree-svg');
+      while (svg.firstChild) svg.removeChild(svg.firstChild);
+      document.getElementById('tree-overlay').style.display = 'flex';
       const data = await fetch(`/image-manager/api/tree/${rootUuid}`).then(r => r.json());
-      document.getElementById('tree-content').innerHTML = renderTreeNode(data);
+      renderSVGTree(data, _currentTreeEntryUuid);
     }
 
     function closeTree() {
       document.getElementById('tree-overlay').style.display = 'none';
       _currentTreeRootUuid = null;
       _currentTreeRootName = null;
+      _currentTreeEntryUuid = null;
+    }
+
+    // ── Tree port drag helpers ────────────────────────────────────────────────
+
+    function _clientToViewport(svg, clientX, clientY) {
+      const rect = svg.getBoundingClientRect();
+      return {
+        x: (clientX - rect.left - window._treePanX) / window._treeScale,
+        y: (clientY - rect.top - window._treePanY) / window._treeScale
+      };
+    }
+
+    function _buildTreeNodeMap(node) {
+      _treeNodeMap[node.uuid] = node;
+      for (const child of (node.children || [])) _buildTreeNodeMap(child);
+    }
+
+    function _treeDescendantSet(nodeUuid) {
+      const result = new Set([nodeUuid]);
+      const queue = [nodeUuid];
+      while (queue.length) {
+        const cur = queue.shift();
+        const node = _treeNodeMap[cur];
+        if (node) {
+          for (const child of (node.children || [])) {
+            if (!child.cross_chain && !result.has(child.uuid)) {
+              result.add(child.uuid);
+              queue.push(child.uuid);
+            }
+          }
+        }
+      }
+      return result;
+    }
+
+    function _cancelDragVisuals() {
+      const de = document.getElementById('drag-edge');
+      if (de) de.remove();
+      document.querySelectorAll('g.tree-node').forEach(g => g.classList.remove('drag-invalid', 'drag-valid'));
+    }
+
+    function _showTreeToast(msg, isError, undoFn) {
+      const toast = document.getElementById('tree-toast');
+      document.getElementById('tree-toast-msg').textContent = msg;
+      const undoBtn = document.getElementById('tree-toast-undo');
+      undoBtn.style.display = undoFn ? '' : 'none';
+      _treeUndoFn = undoFn || null;
+      toast.className = isError ? 'error' : '';
+      toast.style.display = 'flex';
+      clearTimeout(window._treeToastTimer);
+      window._treeToastTimer = setTimeout(() => {
+        toast.style.display = 'none';
+        _treeUndoFn = null;
+      }, 5000);
+    }
+
+    async function _commitParentDrop(childUuid, parentUuid, origParentUuid) {
+      try {
+        const resp = await fetch('/image-manager/api/set-parent', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ child_uuid: childUuid, parent_uuid: parentUuid })
+        });
+        if (!resp.ok) {
+          const err = await resp.json().catch(() => ({}));
+          _showTreeToast(`reassign error: ${err.error || resp.statusText}`, true, null);
+          return;
+        }
+        const data = await fetch(`/image-manager/api/tree/${_currentTreeRootUuid}`).then(r => r.json());
+        renderSVGTree(data, _currentTreeEntryUuid);
+        const undoFn = async () => {
+          window._treeUndoCalls = (window._treeUndoCalls || 0) + 1;
+          document.getElementById('tree-toast').style.display = 'none';
+          await fetch('/image-manager/api/set-parent', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ child_uuid: childUuid, parent_uuid: origParentUuid })
+          });
+          const d2 = await fetch(`/image-manager/api/tree/${_currentTreeRootUuid}`).then(r => r.json());
+          renderSVGTree(d2, _currentTreeEntryUuid);
+        };
+        _showTreeToast('Parent reassigned', false, undoFn);
+      } catch (err) {
+        _showTreeToast(`error: ${err.message}`, true, null);
+      }
+    }
+
+    function _confirmChildDrop(childUuids, targetUuid) {
+      const confirm = document.getElementById('tree-reparent-confirm');
+      document.getElementById('tree-reparent-msg').textContent =
+        `Move ${childUuids.length} child image${childUuids.length !== 1 ? 's' : ''} to this parent?`;
+      confirm.style.display = 'flex';
+      _treeConfirmYes = async () => {
+        confirm.style.display = 'none';
+        try {
+          await fetch('/image-manager/api/set-parents-batch', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ pairs: childUuids.map(c => ({ child_uuid: c, parent_uuid: targetUuid })) })
+          });
+          const data = await fetch(`/image-manager/api/tree/${_currentTreeRootUuid}`).then(r => r.json());
+          renderSVGTree(data, _currentTreeEntryUuid);
+          _showTreeToast(`Moved ${childUuids.length} child${childUuids.length !== 1 ? 'ren' : ''}`, false, null);
+        } catch (err) {
+          _showTreeToast(`error: ${err.message}`, true, null);
+        }
+      };
+      _treeConfirmNo = () => { confirm.style.display = 'none'; };
+    }
+
+    function _updatePortDragHighlights(hoverUuid) {
+      if (!_portDrag) return;
+      document.querySelectorAll('g.tree-node').forEach(g => {
+        g.classList.remove('drag-invalid', 'drag-valid');
+        if (_portDrag.invalidSet.has(g.dataset.uuid)) {
+          g.classList.add('drag-invalid');
+        } else if (g.dataset.uuid === hoverUuid) {
+          g.classList.add('drag-valid');
+        }
+      });
+    }
+
+    function _treeNodeFromPoint(clientX, clientY) {
+      const els = document.elementsFromPoint(clientX, clientY);
+      for (const el of els) {
+        const g = el.closest && el.closest('g.tree-node');
+        if (g) return g;
+      }
+      return null;
+    }
+
+    function _attachPortDrag(circle, portType, nodeUuid, nodeParentUuid, nodeChildren) {
+      circle.addEventListener('pointerdown', e => {
+        e.stopPropagation();
+        e.preventDefault();
+        circle.setPointerCapture(e.pointerId);
+
+        const svg = document.getElementById('tree-svg');
+        const vp = document.getElementById('tree-viewport');
+        const sp = _clientToViewport(svg, e.clientX, e.clientY);
+
+        const line = document.createElementNS(SVG_NS, 'line');
+        line.setAttribute('id', 'drag-edge');
+        line.setAttribute('stroke', getComputedStyle(document.body).getPropertyValue('--im-text').trim());
+        line.setAttribute('stroke-width', '2');
+        line.setAttribute('stroke-dasharray', '6,3');
+        line.setAttribute('pointer-events', 'none');
+        line.setAttribute('x1', sp.x); line.setAttribute('y1', sp.y);
+        line.setAttribute('x2', sp.x); line.setAttribute('y2', sp.y);
+        vp.appendChild(line);
+
+        const invalidSet = portType === 'parent'
+          ? _treeDescendantSet(nodeUuid)
+          : new Set([nodeUuid]);
+
+        _portDrag = {
+          portType, nodeUuid, origParentUuid: nodeParentUuid, invalidSet,
+          childUuids: (nodeChildren || []).filter(c => !c.cross_chain).map(c => c.uuid),
+          dragEdge: line
+        };
+
+        _updatePortDragHighlights(null);
+
+        const onMove = ev => {
+          const sp2 = _clientToViewport(svg, ev.clientX, ev.clientY);
+          line.setAttribute('x2', sp2.x); line.setAttribute('y2', sp2.y);
+          const nodeG = _treeNodeFromPoint(ev.clientX, ev.clientY);
+          _updatePortDragHighlights(nodeG ? nodeG.dataset.uuid : null);
+        };
+
+        const onUp = ev => {
+          circle.removeEventListener('pointermove', onMove);
+          circle.removeEventListener('pointerup', onUp);
+          circle.removeEventListener('pointercancel', onUp);
+
+          const nodeG = _treeNodeFromPoint(ev.clientX, ev.clientY);
+          const targetUuid = nodeG ? nodeG.dataset.uuid : null;
+          const drag = _portDrag;
+          _portDrag = null;
+          _cancelDragVisuals();
+
+          if (targetUuid && drag && !drag.invalidSet.has(targetUuid)) {
+            if (drag.portType === 'parent') {
+              _commitParentDrop(drag.nodeUuid, targetUuid, drag.origParentUuid);
+            } else {
+              _confirmChildDrop(drag.childUuids, targetUuid);
+            }
+          }
+        };
+
+        circle.addEventListener('pointermove', onMove);
+        circle.addEventListener('pointerup', onUp);
+        circle.addEventListener('pointercancel', onUp);
+      });
     }
 
     let _lbUuid = null, _lbName = null;
@@ -677,13 +1345,19 @@
 
       if (meta.positive_prompt) {
         html += `<div class="lb-prompt-block">
-          <span class="lb-label">Positive</span>
+          <div class="lb-prompt-header">
+            <span class="lb-label">Positive</span>
+            <button class="lb-copy-btn" data-copy="${escHtml(meta.positive_prompt)}">copy</button>
+          </div>
           <div class="lb-prompt">${escHtml(meta.positive_prompt)}</div>
         </div>`;
       }
       if (meta.negative_prompt) {
         html += `<div class="lb-prompt-block">
-          <span class="lb-label">Negative</span>
+          <div class="lb-prompt-header">
+            <span class="lb-label">Negative</span>
+            <button class="lb-copy-btn" data-copy="${escHtml(meta.negative_prompt)}">copy</button>
+          </div>
           <div class="lb-prompt">${escHtml(meta.negative_prompt)}</div>
         </div>`;
       }
@@ -697,15 +1371,28 @@
       return html;
     }
 
+    let _lbNavList = [];
+    let _lbNavIdx = 0;
+
     async function openLightbox(uuid, name, rootUuid) {
+      if (_pickingParent) cancelPickParentPhase();
+      clearSelection();
       _lbUuid = uuid; _lbName = name;
+
+      // Snapshot current card order for arrow navigation
+      _lbNavList = [...document.querySelectorAll('#content [data-uuid]')].map(el => el.dataset.uuid);
+      _lbNavIdx = _lbNavList.indexOf(uuid);
+      if (_lbNavIdx === -1) _lbNavIdx = 0;
+      document.getElementById('lb-nav-prev').disabled = _lbNavIdx === 0;
+      document.getElementById('lb-nav-next').disabled = _lbNavIdx === _lbNavList.length - 1;
+
       document.getElementById('lightbox-img').src = `/image-manager/api/image/${uuid}`;
       document.getElementById('lb-send').onclick = (e) => sendToComfy(uuid, e.currentTarget);
       const lineageRoot = rootUuid || uuid;
-      document.getElementById('lb-lineage').onclick = () => { closeLightbox(); openTree(lineageRoot, name); };
+      document.getElementById('lb-lineage').onclick = () => { closeLightbox(); openTree(lineageRoot, name, uuid); };
       document.getElementById('lb-fork').onclick = () => openForkDialog(uuid);
       document.getElementById('lb-panel-content').innerHTML =
-        '<div style="color:#666;font-size:0.82rem;padding:8px 0">Loading…</div>';
+        '<div style="color:var(--im-text-dim);font-size:0.82rem;padding:8px 0">Loading…</div>';
       document.getElementById('lightbox').classList.add('open');
 
       try {
@@ -723,6 +1410,14 @@
       document.getElementById('lightbox').classList.remove('open');
       document.getElementById('lightbox-img').src = '';
       document.getElementById('lb-panel-content').innerHTML = '';
+    }
+
+    function lbNavigate(delta) {
+      _lbNavIdx = Math.max(0, Math.min(_lbNavList.length - 1, _lbNavIdx + delta));
+      const uuid = _lbNavList[_lbNavIdx];
+      if (!uuid || !_cardData[uuid]) return;
+      const d = _cardData[uuid];
+      openLightbox(d.lbUuid, d.name, d.lbRoot);
     }
 
     // ── Fork dialog ───────────────────────────────────────────────────
@@ -787,6 +1482,17 @@
         closeLightbox(); closeTree(); closeDrawer(); closeSettings(); closeForkDialog(); closeMoveDialog(); clearSelection();
       }
       if (e.key === 'l' || e.key === 'L') { enterPickParentPhase(); }
+      if (document.getElementById('lightbox').classList.contains('open')) {
+        if (e.key === 'ArrowRight') { lbNavigate(1); }
+        if (e.key === 'ArrowLeft')  { lbNavigate(-1); }
+      }
+    });
+
+    document.getElementById('lb-panel-content').addEventListener('click', e => {
+      const btn = e.target.closest('.lb-copy-btn');
+      if (!btn) return;
+      const text = btn.getAttribute('data-copy');
+      navigator.clipboard.writeText(text).then(() => showToast('Copied!', false));
     });
 
     // ── Sidebar ──────────────────────────────────────────────────────
@@ -800,52 +1506,202 @@
       document.getElementById('sidebar-expand-btn').classList.toggle('visible', !_sidebarOpen);
     }
 
-    async function loadSidebar() {
-      const folders = await fetch('/image-manager/api/folders').then(r => r.json());
-      const tree = document.getElementById('sidebar-tree');
-      const allActive = !_activeFilter.rootName;
-      tree.innerHTML = `
-        <div class="sidebar-all${allActive ? ' active' : ''}" onclick="clearFilter()">All Images</div>
-        ${folders.map(f => `
-          <div class="sidebar-root-name${_activeFilter.rootName === f.root_name ? ' active' : ''}"
-            data-root-name="${f.root_name}"
-            onclick="selectRootNameFilter('${f.root_name}')">
-            <span class="sidebar-folder-label">${f.root_name}</span>
-            <div style="display:flex;align-items:center;gap:4px;">
-              <span class="sidebar-count">${f.count}</span>
-              <div class="sidebar-folder-actions" onclick="event.stopPropagation()">
-                <button title="Rename" onclick="startFolderRename('${f.root_name}')">✎</button>
-                <button title="Delete" onclick="openDeleteFolderDialog('${f.root_name}',${f.count})">✕</button>
+    function buildFolderTree(folders) {
+      const root = { children: {} };
+      for (const { root_name, count } of folders) {
+        const segments = root_name.split('/');
+        let node = root;
+        for (let i = 0; i < segments.length; i++) {
+          const seg = segments[i];
+          if (!node.children[seg]) {
+            node.children[seg] = { name: seg, count: 0, children: {}, path: segments.slice(0, i + 1).join('/') };
+          }
+          node = node.children[seg];
+          if (i === segments.length - 1) {
+            node.count = count;
+            node.isLeaf = true;
+          }
+        }
+      }
+      function sumAndCollect(node) {
+        const childList = Object.values(node.children).map(sumAndCollect);
+        if (!node.isLeaf && childList.length > 0) {
+          node.count = childList.reduce((s, c) => s + c.count, 0);
+          node.isGroup = true;
+        } else {
+          node.isGroup = false;
+        }
+        node.childList = childList;
+        return node;
+      }
+      return Object.values(root.children).map(sumAndCollect);
+    }
+
+    function collectLeaves(node) {
+      if (node.isLeaf) return [node];
+      return (node.childList || []).flatMap(collectLeaves);
+    }
+
+    function groupRenamePath(oldPrefix, newPrefix, leafPath) {
+      if (leafPath === oldPrefix) return newPrefix;
+      if (leafPath.startsWith(oldPrefix + '/')) return newPrefix + leafPath.slice(oldPrefix.length);
+      return leafPath;
+    }
+
+    const _SIDEBAR_EXP_KEY = 'im-sidebar-expanded';
+    function _getSidebarExpanded() {
+      try { return new Set(JSON.parse(localStorage.getItem(_SIDEBAR_EXP_KEY) || '[]')); } catch { return new Set(); }
+    }
+    function _setSidebarExpanded(set) {
+      localStorage.setItem(_SIDEBAR_EXP_KEY, JSON.stringify([...set]));
+    }
+
+    function _toggleSidebarGroup(path) {
+      const exp = _getSidebarExpanded();
+      if (exp.has(path)) exp.delete(path); else exp.add(path);
+      _setSidebarExpanded(exp);
+      const btn = document.querySelector(`.sidebar-group[data-path="${CSS.escape(path)}"]`);
+      const children = btn && btn.nextElementSibling;
+      if (btn) btn.classList.toggle('open', exp.has(path));
+      if (children) children.classList.toggle('collapsed', !exp.has(path));
+    }
+
+    function _renderSidebarNodes(nodes, depth) {
+      const exp = _getSidebarExpanded();
+      const indent = depth * 12;
+      return nodes.map(node => {
+        if (node.isGroup) {
+          const isOpen = exp.has(node.path);
+          const esc = node.path.replace(/'/g, "\\'");
+          const children = _renderSidebarNodes(node.childList, depth + 1);
+          return `
+            <div class="sidebar-group${isOpen ? ' open' : ''}" data-path="${escHtml(node.path)}"
+              style="padding-left:${12 + indent}px"
+              onclick="_toggleSidebarGroup('${esc}')">
+              <span class="sidebar-group-chevron">›</span>&nbsp;<span class="sidebar-folder-label">${escHtml(node.name)}</span>
+              <div style="display:flex;align-items:center;gap:4px;flex-shrink:0">
+                <span class="sidebar-count">${node.count}</span>
+                <div class="sidebar-folder-actions" onclick="event.stopPropagation()">
+                  <button title="Rename" onclick="startGroupRename('${esc}')">✎</button>
+                  <button title="Delete" onclick="openDeleteGroupDialog('${esc}',${node.count},${JSON.stringify(collectLeaves(node).map(l=>l.path))})">✕</button>
+                </div>
               </div>
             </div>
-          </div>
-        `).join('')}
+            <div class="sidebar-group-children${isOpen ? '' : ' collapsed'}">${children}</div>`;
+        }
+        const esc = node.path.replace(/'/g, "\\'");
+        const isActive = _activeFilter.rootName === node.path;
+        return `
+          <div class="sidebar-root-name${isActive ? ' active' : ''}"
+            data-root-name="${escHtml(node.path)}"
+            style="padding-left:${12 + indent}px"
+            onclick="selectRootNameFilter('${esc}')">
+            <span class="sidebar-folder-label">${escHtml(node.name)}</span>
+            <div style="display:flex;align-items:center;gap:4px;flex-shrink:0">
+              <span class="sidebar-count">${node.count}</span>
+              <div class="sidebar-folder-actions" onclick="event.stopPropagation()">
+                <button title="Rename" onclick="startFolderRename('${esc}')">✎</button>
+                <button title="Delete" onclick="openDeleteFolderDialog('${esc}',${node.count})">✕</button>
+              </div>
+            </div>
+          </div>`;
+      }).join('');
+    }
+
+    async function loadSidebar() {
+      const folders = await fetch('/image-manager/api/folders').then(r => r.json());
+      const treeEl = document.getElementById('sidebar-tree');
+      const allActive = !_activeFilter.rootName;
+      const nodes = buildFolderTree(folders);
+      treeEl.innerHTML = `
+        <div class="sidebar-all${allActive ? ' active' : ''}" onclick="clearFilter()">All Images</div>
+        ${_renderSidebarNodes(nodes, 0)}
       `;
     }
 
     let _deleteFolderTarget = null;
+    let _deleteFolderLeafPaths = null;
 
     function openDeleteFolderDialog(rootName, count) {
       _deleteFolderTarget = rootName;
+      _deleteFolderLeafPaths = null;
       document.getElementById('delete-folder-msg').textContent =
         `Delete "${rootName}" and its ${count} image${count !== 1 ? 's' : ''}? This cannot be undone.`;
       document.getElementById('delete-folder-dialog').classList.add('open');
     }
 
+    function openDeleteGroupDialog(groupPath, totalCount, leafPaths) {
+      _deleteFolderTarget = groupPath;
+      _deleteFolderLeafPaths = leafPaths;
+      document.getElementById('delete-folder-msg').textContent =
+        `Delete group "${groupPath}" and all its ${totalCount} image${totalCount !== 1 ? 's' : ''}? This cannot be undone.`;
+      document.getElementById('delete-folder-dialog').classList.add('open');
+    }
+
     function closeDeleteFolderDialog() {
       _deleteFolderTarget = null;
+      _deleteFolderLeafPaths = null;
       document.getElementById('delete-folder-dialog').classList.remove('open');
     }
 
     async function confirmDeleteFolder() {
       if (!_deleteFolderTarget) return;
       const name = _deleteFolderTarget;
+      const leafPaths = _deleteFolderLeafPaths;
       closeDeleteFolderDialog();
-      const resp = await fetch(`/image-manager/api/folders/${encodeURIComponent(name)}`, { method: 'DELETE' });
-      if (resp.ok) {
-        if (_activeFilter.rootName === name) clearFilter();
+      if (leafPaths) {
+        for (const leafPath of leafPaths) {
+          await fetch(`/image-manager/api/folders/${encodeURIComponent(leafPath)}`, { method: 'DELETE' });
+        }
+        if (leafPaths.includes(_activeFilter.rootName) || leafPaths.some(p => _activeFilter.rootName && _activeFilter.rootName.startsWith(p + '/'))) clearFilter();
         else { loadSidebar(); _dispatchView(); }
+      } else {
+        const resp = await fetch(`/image-manager/api/folders/${encodeURIComponent(name)}`, { method: 'DELETE' });
+        if (resp.ok) {
+          if (_activeFilter.rootName === name) clearFilter();
+          else { loadSidebar(); _dispatchView(); }
+        }
       }
+    }
+
+    function startGroupRename(groupPath) {
+      const row = document.querySelector(`.sidebar-group[data-path="${CSS.escape(groupPath)}"]`);
+      if (!row) return;
+      const label = row.querySelector('.sidebar-folder-label');
+      label.style.display = 'none';
+      const input = document.createElement('input');
+      input.className = 'sidebar-rename-input';
+      input.value = groupPath;
+      input.onclick = e => e.stopPropagation();
+      let errorEl = row.parentElement.querySelector('.sidebar-rename-error');
+      if (!errorEl) { errorEl = document.createElement('div'); errorEl.className = 'sidebar-rename-error'; }
+      row.after(errorEl);
+      input.onkeydown = async e => {
+        if (e.key === 'Escape') { loadSidebar(); return; }
+        if (e.key !== 'Enter') return;
+        const newPrefix = input.value.trim();
+        if (!newPrefix) { errorEl.textContent = 'Name cannot be empty.'; return; }
+        const siblings = document.querySelectorAll(`.sidebar-root-name`);
+        const leafNames = [];
+        document.querySelectorAll(`.sidebar-group[data-path="${CSS.escape(groupPath)}"] ~ .sidebar-group-children .sidebar-root-name`).forEach(el => {
+          leafNames.push(el.dataset.rootName);
+        });
+        const allLeaves = Array.from(document.querySelectorAll('.sidebar-root-name[data-root-name]'))
+          .map(el => el.dataset.rootName)
+          .filter(n => n === groupPath || n.startsWith(groupPath + '/'));
+        let failed = false;
+        for (const leafPath of allLeaves) {
+          const newLeafPath = groupRenamePath(groupPath, newPrefix, leafPath);
+          const resp = await fetch(`/image-manager/api/folders/${encodeURIComponent(leafPath)}`,
+            { method: 'PATCH', headers: {'Content-Type':'application/json'}, body: JSON.stringify({name: newLeafPath}) });
+          if (!resp.ok) { failed = true; const body = await resp.text(); errorEl.textContent = body; break; }
+          if (_activeFilter.rootName === leafPath) _activeFilter = { rootName: newLeafPath };
+        }
+        if (!failed) { await loadSidebar(); await _dispatchView(); }
+      };
+      row.insertBefore(input, label);
+      input.focus();
+      input.select();
     }
 
     function startFolderRename(rootName) {
@@ -885,14 +1741,16 @@
       _activeFilter = { rootName };
       clearSelection();
       loadSidebar();
-      _dispatchView();
+      if (_searchQuery) enterSearchMode(_searchQuery);
+      else _dispatchView();
     }
 
     function clearFilter() {
       _activeFilter = { rootName: null };
       clearSelection();
       loadSidebar();
-      _dispatchView();
+      if (_searchQuery) enterSearchMode(_searchQuery);
+      else _dispatchView();
     }
 
     function _buildFilterParams() {
@@ -919,14 +1777,14 @@
                   <div class="card-body">
                     <div class="card-name">${img.root_name}</div>
                     ${img.latest_filename ? `<div class="card-tip">${img.latest_filename}</div>` : ''}
-                    ${img.descendant_count > 0 ? `<div style="font-size:0.75rem;color:#888">${img.descendant_count} refinement${img.descendant_count !== 1 ? 's' : ''}</div>` : ''}
+                    ${img.descendant_count > 0 ? `<div style="font-size:0.75rem;color:var(--im-text-muted)">${img.descendant_count} refinement${img.descendant_count !== 1 ? 's' : ''}</div>` : ''}
                     <div style="display:flex;gap:6px;margin-top:4px;">
                       <button onclick="event.stopPropagation();sendToComfy('${img.latest_uuid}',this)"
-                        style="flex:1;font-size:0.75rem;background:#444;border:none;color:#ddd;padding:2px 8px;border-radius:3px;cursor:pointer">
+                        class="card-btn">
                         Send to Comfy
                       </button>
                       <button onclick="event.stopPropagation();openTree('${img.uuid}','${img.root_name}')"
-                        style="flex:1;font-size:0.75rem;background:#333;border:none;color:#aaa;padding:2px 8px;border-radius:3px;cursor:pointer">
+                        class="card-btn-secondary">
                         Lineage
                       </button>
                     </div>
@@ -959,20 +1817,40 @@
       _dispatchView();
     }
 
-    const dz = document.getElementById('drop-zone');
-    dz.addEventListener('dragover', e => { e.preventDefault(); dz.style.borderColor = '#aaa'; });
-    dz.addEventListener('dragleave', () => { dz.style.borderColor = '#555'; });
-    dz.addEventListener('drop', async e => {
-      e.preventDefault();
-      dz.style.borderColor = '#555';
-      for (const file of e.dataTransfer.files) {
-        if (!file.type.startsWith('image/')) continue;
-        const form = new FormData();
-        form.append('file', file);
-        form.append('filename', file.name);
-        await fetch('/image-manager/api/import', {method: 'POST', body: form});
-        _dispatchView();
+    let _dragEnterCount = 0;
+
+    document.addEventListener('dragenter', e => {
+      if (!e.dataTransfer || !e.dataTransfer.types.includes('Files')) return;
+      _dragEnterCount++;
+      document.getElementById('drop-overlay').classList.add('active');
+    });
+
+    document.addEventListener('dragleave', e => {
+      if (!e.dataTransfer || !e.dataTransfer.types.includes('Files')) return;
+      _dragEnterCount--;
+      if (_dragEnterCount <= 0) {
+        _dragEnterCount = 0;
+        document.getElementById('drop-overlay').classList.remove('active');
       }
+    });
+
+    document.addEventListener('dragover', e => {
+      if (e.dataTransfer && e.dataTransfer.types.includes('Files')) e.preventDefault();
+    });
+
+    document.addEventListener('drop', async e => {
+      if (!e.dataTransfer || !e.dataTransfer.types.includes('Files')) return;
+      e.preventDefault();
+      _dragEnterCount = 0;
+      document.getElementById('drop-overlay').classList.remove('active');
+      const files = [...e.dataTransfer.files].filter(f => f.type.startsWith('image/'));
+      if (!files.length) return;
+      for (const file of files) {
+        const fd = new FormData();
+        fd.append('file', file);
+        await fetch('/image-manager/api/import', { method: 'POST', body: fd });
+      }
+      await load();
     });
 
     const _savedView = localStorage.getItem('imageManager.viewMode');
@@ -981,11 +1859,106 @@
     let _flatMode = _savedView !== 'filmstrip';
     let _clusterMode = false;
     let _orderMode = false;
+    let _orphanMode = false;
+    let _searchQuery = '';
+    let _searchDebounce = null;
+
+    function _sortImages(imgs, sort) {
+      sort = sort || localStorage.getItem('imageManager.flatSort') || 'date-desc';
+      const copy = [...imgs];
+      switch (sort) {
+        case 'date-asc':  copy.sort((a, b) => a.created_at.localeCompare(b.created_at)); break;
+        case 'name-asc':  copy.sort((a, b) => a.filename.localeCompare(b.filename)); break;
+        case 'name-desc': copy.sort((a, b) => b.filename.localeCompare(a.filename)); break;
+        case 'gen-asc':   copy.sort((a, b) => a.generation - b.generation); break;
+        case 'gen-desc':  copy.sort((a, b) => b.generation - a.generation); break;
+        default:          copy.sort((a, b) => b.created_at.localeCompare(a.created_at)); break;
+      }
+      return copy;
+    }
+
+    const _sortSelect = document.getElementById('sort-select');
+    _sortSelect.value = localStorage.getItem('imageManager.flatSort') || 'date-desc';
+    _sortSelect.addEventListener('change', function() {
+      localStorage.setItem('imageManager.flatSort', this.value);
+      _dispatchView();
+    });
+
+    function _showSortSelect() { _sortSelect.style.display = ''; }
+    function _hideSortSelect() { _sortSelect.style.display = 'none'; }
+
+    document.getElementById('search-input').addEventListener('input', function() {
+      clearTimeout(_searchDebounce);
+      const q = this.value.trim();
+      document.getElementById('search-clear-btn').style.display = this.value ? 'block' : 'none';
+      _searchDebounce = setTimeout(() => {
+        if (q) enterSearchMode(q);
+        else exitSearchMode();
+      }, 300);
+    });
+
+    document.getElementById('search-clear-btn').addEventListener('click', () => {
+      const input = document.getElementById('search-input');
+      input.value = '';
+      input.focus();
+      document.getElementById('search-clear-btn').style.display = 'none';
+      exitSearchMode();
+    });
+
+    async function enterSearchMode(q) {
+      _searchQuery = q;
+      const params = new URLSearchParams({q});
+      if (_activeFilter.rootName) params.set('root_name', _activeFilter.rootName);
+      const resp = await fetch('/image-manager/api/search?' + params.toString());
+      const images = await resp.json();
+      const content = document.getElementById('content');
+      ['flat-btn', 'filmstrip-btn', 'cluster-btn', 'link-btn'].forEach(id => {
+        const el = document.getElementById(id);
+        if (el) { el.disabled = true; el.style.opacity = '0.4'; }
+      });
+      if (images.length === 0) {
+        content.innerHTML = `<div class="empty">No results for "${escHtml(q)}".</div>`;
+        return;
+      }
+      const cardHtml = img => {
+        const stem = img.filename.split('/').pop().replace(/\.[^.]+$/, '');
+        _cardData[img.uuid] = {lbUuid: img.uuid, name: img.root_name, lbRoot: img.root_uuid, hasParent: !!img.parent_uuid};
+        return `
+          <div class="card" data-uuid="${img.uuid}">
+            <img src="/image-manager/api/image/${img.uuid}" loading="lazy" alt="${escHtml(stem)}">
+            <div class="card-body">
+              <div class="card-name">${escHtml(img.root_name)}</div>
+              <div style="font-size:0.7rem;color:var(--im-text-muted);margin-bottom:2px">${escHtml(stem)}</div>
+              <div style="display:flex;gap:6px;margin-top:4px;">
+                <button onclick="event.stopPropagation();sendToComfy('${img.uuid}',this)"
+                  class="card-btn">
+                  Send to Comfy
+                </button>
+                <button onclick="event.stopPropagation();openTree('${img.root_uuid}','${img.root_name}','${img.uuid}')"
+                  class="card-btn-secondary">
+                  Lineage
+                </button>
+              </div>
+            </div>
+          </div>`;
+      };
+      content.innerHTML = `<div class="grid">${images.map(cardHtml).join('')}</div>`;
+    }
+
+    function exitSearchMode() {
+      _searchQuery = '';
+      ['flat-btn', 'filmstrip-btn', 'cluster-btn', 'link-btn'].forEach(id => {
+        const el = document.getElementById(id);
+        if (el) { el.disabled = false; el.style.opacity = ''; }
+      });
+      _dispatchView();
+    }
 
     async function _dispatchView() {
       if (_clusterMode) await enterClusterMode();
       else if (_orderMode) await renderOrderChecker();
       else if (_filmstripMode) await renderFilmstrip();
+      else if (_orphanMode) await renderFlat();
       else await enterFlatMode();
     }
 
@@ -998,6 +1971,7 @@
     } else {
       document.getElementById('flat-btn').classList.add('active');
       document.getElementById('flat-btn').textContent = 'Flat ✓';
+      _showSortSelect();
       renderFlat();
     }
 
@@ -1089,25 +2063,15 @@
 
     function _updateSelectionBar() {
       const bar = document.getElementById('selection-bar');
-      const n = _selectedUUIDs.size;
       if (_pickingParent) {
         bar.classList.add('open'); // always visible in pick-parent phase
-        document.getElementById('selection-count').style.display = 'none';
-        document.getElementById('selection-link-btn').style.display = 'none';
-        document.getElementById('selection-fork-btn').style.display = 'none';
-        document.getElementById('selection-delete-btn').style.display = 'none';
         document.getElementById('pick-parent-message').style.display = '';
         document.getElementById('pick-parent-cancel-btn').style.display = '';
       } else {
-        document.getElementById('selection-count').style.display = '';
-        document.getElementById('selection-link-btn').style.display = '';
-        document.getElementById('selection-fork-btn').style.display = '';
-        document.getElementById('selection-delete-btn').style.display = '';
+        bar.classList.remove('open');
         document.getElementById('pick-parent-message').style.display = 'none';
         document.getElementById('pick-parent-cancel-btn').style.display = 'none';
         document.getElementById('pick-parent-confirm').style.display = 'none';
-        document.getElementById('selection-count').textContent = `${n} selected`;
-        bar.classList.toggle('open', n > 0);
       }
     }
 
@@ -1181,6 +2145,11 @@
       const mw = menu.offsetWidth || 160, mh = menu.offsetHeight || 200;
       menu.style.left = (x + mw > vw ? vw - mw - 4 : x) + 'px';
       menu.style.top  = (y + mh > vh ? vh - mh - 4 : y) + 'px';
+      const unlinkItem = document.getElementById('ctx-unlink-item');
+      if (unlinkItem) {
+        const hasParent = _cardData[uuid]?.hasParent;
+        unlinkItem.classList.toggle('ctx-item-disabled', !hasParent);
+      }
     }
 
     function _hideContextMenu() {
@@ -1231,8 +2200,38 @@
       openForkDialog(uuid);
     }
 
-    async function _ctxDelete() {
+    function _ctxMove() {
+      _hideContextMenu();
+      openMoveDialog();
+    }
+
+    async function _ctxUnlinkParent() {
+      const uuid = _ctxUuid;
+      _hideContextMenu();
+      try {
+        const resp = await fetch('/image-manager/api/unlink-parent', {
+          method: 'POST',
+          headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify({child_uuid: uuid}),
+        });
+        if (!resp.ok) {
+          const msg = resp.headers.get('content-type')?.includes('json')
+            ? (await resp.json()).message || 'Unlink failed'
+            : await resp.text();
+          showToast(msg || 'Unlink failed', true);
+          return;
+        }
+        showToast('Unlinked', false);
+        loadSidebar();
+        _dispatchView();
+      } catch (e) {
+        showToast('Unlink failed', true);
+      }
+    }
+
+    async function _deleteSelected() {
       const uuids = [..._selectedUUIDs];
+      if (uuids.length === 0) return;
       const n = uuids.length;
       _hideContextMenu();
       if (!confirm(`Delete ${n} image${n !== 1 ? 's' : ''}? This cannot be undone.`)) return;
@@ -1336,6 +2335,7 @@
     // ── Flat mode ────────────────────────────────────────────────────
 
     function toggleFlatMode() {
+      if (_orphanMode) { exitOrphanMode(); return; }
       if (!_filmstripMode && !_clusterMode) return;
       enterFlatMode();
     }
@@ -1362,15 +2362,23 @@
         document.getElementById('filmstrip-btn').classList.remove('active');
         document.getElementById('filmstrip-btn').textContent = 'Filmstrip';
       }
+      if (_orphanMode) {
+        _orphanMode = false;
+        document.getElementById('orphan-btn').classList.remove('active');
+        document.getElementById('orphan-btn').textContent = 'Orphans';
+      }
       _flatMode = true;
       localStorage.setItem('imageManager.viewMode', 'flat');
       document.getElementById('flat-btn').classList.add('active');
       document.getElementById('flat-btn').textContent = 'Flat ✓';
+      _showSortSelect();
       await renderFlat();
     }
 
     async function renderFlat() {
-      const resp = await fetch('/image-manager/api/all-images' + _buildFilterParams());
+      const _fp = new URLSearchParams(_buildFilterParams().replace(/^\?/, ''));
+      if (_orphanMode) _fp.set('orphan', 'true');
+      const resp = await fetch('/image-manager/api/all-images' + (_fp.toString() ? '?' + _fp.toString() : ''));
       const images = await resp.json();
       const content = document.getElementById('content');
       if (images.length === 0) {
@@ -1393,35 +2401,41 @@
             </div>
             <div class="card-body">
               <div class="card-name">${stem}</div>
-              <div class="card-root-name" style="font-size:0.7rem;color:#888;margin-bottom:2px">${img.root_name}</div>
+              <div class="card-root-name" style="font-size:0.7rem;color:var(--im-text-muted);margin-bottom:2px">${img.root_name}</div>
               <div style="display:flex;gap:6px;margin-top:4px;">
                 <button onclick="event.stopPropagation();sendToComfy('${img.uuid}',this)"
-                  style="flex:1;font-size:0.75rem;background:#444;border:none;color:#ddd;padding:2px 8px;border-radius:3px;cursor:pointer">
+                  class="card-btn">
                   Send to Comfy
                 </button>
-                <button onclick="event.stopPropagation();openTree('${img.root_uuid}','${img.root_name}')"
-                  style="flex:1;font-size:0.75rem;background:#333;border:none;color:#aaa;padding:2px 8px;border-radius:3px;cursor:pointer">
+                <button onclick="event.stopPropagation();openTree('${img.root_uuid}','${img.root_name}','${img.uuid}')"
+                  class="card-btn-secondary">
                   Lineage
                 </button>
               </div>
             </div>
           </div>`;
       };
-      const byDate = {};
-      for (const img of images) {
-        const date = img.created_at.slice(0, 10);
-        (byDate[date] = byDate[date] || []).push(img);
-      }
-      const html = Object.entries(byDate)
-        .sort(([a], [b]) => b.localeCompare(a))
-        .map(([date, imgs]) => `
-          <div class="date-group">
-            <div class="date-label collapsible" onclick="this.closest('.date-group').classList.toggle('collapsed')">
-              <span class="collapse-chevron">&#9660;</span>${date}
+      const sort = localStorage.getItem('imageManager.flatSort') || 'date-desc';
+      const sorted = _sortImages(images, sort);
+      let html;
+      if (sort === 'date-desc' || sort === 'date-asc') {
+        const byDate = {};
+        for (const img of sorted) {
+          const date = img.created_at.slice(0, 10);
+          (byDate[date] = byDate[date] || []).push(img);
+        }
+        html = Object.entries(byDate)
+          .map(([date, imgs]) => `
+            <div class="date-group">
+              <div class="date-label collapsible" onclick="this.closest('.date-group').classList.toggle('collapsed')">
+                <span class="collapse-chevron">&#9660;</span>${date}
+              </div>
+              <div class="grid">${imgs.map(cardHtml).join('')}</div>
             </div>
-            <div class="grid">${imgs.map(cardHtml).join('')}</div>
-          </div>
-        `).join('');
+          `).join('');
+      } else {
+        html = `<div class="grid">${sorted.map(cardHtml).join('')}</div>`;
+      }
       content.innerHTML = html;
     }
 
@@ -1441,10 +2455,16 @@
     async function enterFilmstripMode() {
       clearSelection();
       if (_clusterMode) exitClusterMode();
+      if (_orphanMode) {
+        _orphanMode = false;
+        document.getElementById('orphan-btn').classList.remove('active');
+        document.getElementById('orphan-btn').textContent = 'Orphans';
+      }
       if (_flatMode) {
         _flatMode = false;
         document.getElementById('flat-btn').classList.remove('active');
         document.getElementById('flat-btn').textContent = 'Flat';
+        _hideSortSelect();
       }
       _filmstripMode = true;
       localStorage.setItem('imageManager.viewMode', 'filmstrip');
@@ -1528,10 +2548,16 @@
     async function enterClusterMode() {
       clearSelection();
       if (_filmstripMode) exitFilmstripMode();
+      if (_orphanMode) {
+        _orphanMode = false;
+        document.getElementById('orphan-btn').classList.remove('active');
+        document.getElementById('orphan-btn').textContent = 'Orphans';
+      }
       if (_flatMode) {
         _flatMode = false;
         document.getElementById('flat-btn').classList.remove('active');
         document.getElementById('flat-btn').textContent = 'Flat';
+        _hideSortSelect();
       }
       _clusterMode = true;
       const btn = document.getElementById('cluster-btn');
@@ -1606,11 +2632,11 @@
                     <div class="card-tip">${shortName}</div>
                     <div style="display:flex;gap:6px;margin-top:4px;">
                       <button onclick="event.stopPropagation();sendToComfy('${item.uuid}',this)"
-                        style="flex:1;font-size:0.75rem;background:#444;border:none;color:#ddd;padding:2px 8px;border-radius:3px;cursor:pointer">
+                        class="card-btn">
                         Send to Comfy
                       </button>
-                      <button onclick="event.stopPropagation();openTree('${item.root_uuid}','${rootName}')"
-                        style="flex:1;font-size:0.75rem;background:#333;border:none;color:#aaa;padding:2px 8px;border-radius:3px;cursor:pointer">
+                      <button onclick="event.stopPropagation();openTree('${item.root_uuid}','${rootName}','${item.uuid}')"
+                        class="card-btn-secondary">
                         Lineage
                       </button>
                     </div>
@@ -1653,16 +2679,63 @@
     function enterOrderMode() {
       if (_clusterMode) exitClusterMode();
       if (_filmstripMode) exitFilmstripMode();
+      if (_orphanMode) {
+        _orphanMode = false;
+        document.getElementById('orphan-btn').classList.remove('active');
+        document.getElementById('orphan-btn').textContent = 'Orphans';
+      }
       if (_flatMode) {
         _flatMode = false;
         document.getElementById('flat-btn').classList.remove('active');
         document.getElementById('flat-btn').textContent = 'Flat';
+        _hideSortSelect();
       }
       _orderMode = true;
       const btn = document.getElementById('order-btn');
       btn.classList.add('active');
       btn.textContent = 'Order ✓';
       renderOrderChecker();
+    }
+
+    // ── Orphan Filter Mode ───────────────────────────────────────────
+
+    function toggleOrphanMode() {
+      _orphanMode ? exitOrphanMode() : enterOrphanMode();
+    }
+
+    function exitOrphanMode() {
+      _orphanMode = false;
+      document.getElementById('orphan-btn').classList.remove('active');
+      document.getElementById('orphan-btn').textContent = 'Orphans';
+      _dispatchView();
+    }
+
+    async function enterOrphanMode() {
+      clearSelection();
+      if (_filmstripMode) {
+        _filmstripMode = false;
+        document.getElementById('filmstrip-btn').classList.remove('active');
+        document.getElementById('filmstrip-btn').textContent = 'Filmstrip';
+      }
+      if (_clusterMode) {
+        _clusterMode = false;
+        document.getElementById('cluster-btn').classList.remove('active');
+        document.getElementById('cluster-btn').textContent = 'Cluster';
+        document.getElementById('cluster-progress').style.display = 'none';
+      }
+      if (_orderMode) {
+        _orderMode = false;
+        document.getElementById('order-btn').classList.remove('active');
+        document.getElementById('order-btn').textContent = 'Order';
+      }
+      _flatMode = true;
+      _orphanMode = true;
+      document.getElementById('flat-btn').classList.add('active');
+      document.getElementById('flat-btn').textContent = 'Flat ✓';
+      _showSortSelect();
+      document.getElementById('orphan-btn').classList.add('active');
+      document.getElementById('orphan-btn').textContent = 'Orphans ✓';
+      await renderFlat();
     }
 
     const _skippedViolations = new Set();
@@ -1691,7 +2764,7 @@
             <div class="order-violation-row">
               <img class="order-violation-thumb" src="/image-manager/api/image/${v.parent_uuid}" alt="">
               <div class="order-violation-info">
-                <div>${escHtml(v.parent_filename || v.parent_uuid.slice(0, 8))} <em style="color:#888">(parent)</em></div>
+                <div>${escHtml(v.parent_filename || v.parent_uuid.slice(0, 8))} <em style="color:var(--im-text-muted)">(parent)</em></div>
                 <div class="ts">${v.parent_created_at} ← newer · wrong direction</div>
               </div>
             </div>
@@ -1699,7 +2772,7 @@
             <div class="order-violation-row">
               <img class="order-violation-thumb" src="/image-manager/api/image/${v.child_uuid}" alt="">
               <div class="order-violation-info">
-                <div>${escHtml(v.child_filename || v.child_uuid.slice(0, 8))} <em style="color:#888">(child)</em></div>
+                <div>${escHtml(v.child_filename || v.child_uuid.slice(0, 8))} <em style="color:var(--im-text-muted)">(child)</em></div>
                 <div class="ts">${v.child_created_at} ← older</div>
               </div>
             </div>
@@ -1777,6 +2850,30 @@
       const enforceStored = localStorage.getItem('imageManager.enforceChronological');
       document.getElementById('settings-enforce-chronological').checked = enforceStored === 'true';
     }
+
+    function _initDisplaySettings() {
+      document.getElementById('settings-hide-gen-badges').checked =
+        localStorage.getItem('imageManager.hideGenBadges') === 'true';
+      document.getElementById('settings-hide-chain-color').checked =
+        localStorage.getItem('imageManager.hideChainColor') === 'true';
+      document.getElementById('settings-light-theme').checked =
+        localStorage.getItem('imageManager.lightTheme') === 'true';
+    }
+
+    document.getElementById('settings-hide-gen-badges').addEventListener('change', function() {
+      document.body.classList.toggle('hide-gen-badges', this.checked);
+      localStorage.setItem('imageManager.hideGenBadges', this.checked);
+    });
+    document.getElementById('settings-hide-chain-color').addEventListener('change', function() {
+      document.body.classList.toggle('hide-chain-color', this.checked);
+      localStorage.setItem('imageManager.hideChainColor', this.checked);
+    });
+    document.getElementById('settings-light-theme').addEventListener('change', function() {
+      document.body.classList.toggle('light-theme', this.checked);
+      localStorage.setItem('imageManager.lightTheme', this.checked);
+    });
+
+    _initDisplaySettings();
 
     function openSettings() {
       document.getElementById('settings-drawer').classList.add('open');

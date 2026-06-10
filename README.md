@@ -79,6 +79,10 @@ In the ComfyUI settings panel, set **ImageManager.managed_folder** to any absolu
 
 Each image gets a sidecar `.json` file stored beside it. The sidecar is the source of truth — the SQLite index is derived from it and can be rebuilt at any time. This means you can copy a folder of managed images elsewhere and lineage is preserved.
 
+## Future changes
+- Image tagging for semantic searching
+- 
+
 ## License
 
 MIT

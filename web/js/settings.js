@@ -1,4 +1,5 @@
 import { app } from "../../../scripts/app.js";
+import { api } from "../../../scripts/api.js";
 
 const IM_PATH = "/image-manager";
 const TOOLTIP = "Open Image Manager (Shift+Click opens in popup)";
@@ -30,10 +31,8 @@ app.registerExtension({
             tooltip: "Absolute path for managed image storage. Restart required to take effect.",
         });
 
-        window.addEventListener("message", (event) => {
-            if (event.data?.type === "loadWorkflow" && event.data.workflow) {
-                app.loadGraphData(event.data.workflow);
-            }
+        api.addEventListener("im_load_workflow", (event) => {
+            app.loadGraphData(event.detail.workflow);
         });
     },
 });

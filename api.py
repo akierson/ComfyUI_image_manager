@@ -1,3 +1,4 @@
+import asyncio
 import json
 import sqlite3
 from pathlib import Path
@@ -5,7 +6,7 @@ from pathlib import Path
 from aiohttp import web
 
 
-def make_app(managed_root: Path, db_path: Path) -> web.Application:
+def make_app(managed_root: Path, db_path: Path, ws_send=None) -> web.Application:
     app = web.Application()
     routes = web.RouteTableDef()
 
@@ -25,83 +26,96 @@ def make_app(managed_root: Path, db_path: Path) -> web.Application:
     async def get_roots(request):
         date_filter = request.rel_url.query.get("date")
         name_filter = request.rel_url.query.get("root_name")
-        where = "i.parent_uuid IS NULL"
-        params = []
-        if date_filter:
-            where += " AND date(tip.latest) = ?"
-            params.append(date_filter)
-        if name_filter:
-            where += " AND i.root_name = ?"
-            params.append(name_filter)
-        con = sqlite3.connect(db_path)
-        rows = con.execute(
-            f"SELECT i.uuid, i.root_name, i.filename, i.abs_path, i.created_at, i.parent_uuid "
-            f"FROM images i "
-            f"JOIN (SELECT root_uuid, MAX(created_at) as latest FROM images GROUP BY root_uuid) tip "
-            f"  ON tip.root_uuid = i.uuid "
-            f"WHERE {where} ORDER BY tip.latest DESC",
-            params
-        ).fetchall()
-        result = []
-        for r in rows:
-            count = con.execute(
-                "SELECT COUNT(*) FROM images WHERE root_uuid = ? AND uuid != ?", (r[0], r[0])
-            ).fetchone()[0]
-            tip = con.execute(
-                "SELECT uuid, created_at, filename FROM images WHERE root_uuid = ? ORDER BY created_at DESC LIMIT 1",
-                (r[0],)
-            ).fetchone()
-            tip_stem = tip[2].split("/")[-1].rsplit(".", 1)[0] if tip[2] else None
-            result.append({
-                "uuid": r[0],
-                "root_name": r[1],
-                "filename": r[2],
-                "abs_path": r[3],
-                "created_at": r[4],
-                "parent_uuid": r[5],
-                "descendant_count": count,
-                "latest_uuid": tip[0],
-                "latest_created_at": tip[1],
-                "latest_filename": tip_stem,
-            })
-        con.close()
+
+        def _read():
+            where = "i.parent_uuid IS NULL"
+            params = []
+            if date_filter:
+                where += " AND date(tip.latest) = ?"
+                params.append(date_filter)
+            if name_filter:
+                where += " AND i.root_name = ?"
+                params.append(name_filter)
+            con = sqlite3.connect(db_path, timeout=10)
+            rows = con.execute(
+                f"SELECT i.uuid, i.root_name, i.filename, i.abs_path, i.created_at, i.parent_uuid "
+                f"FROM images i "
+                f"JOIN (SELECT root_uuid, MAX(created_at) as latest FROM images GROUP BY root_uuid) tip "
+                f"  ON tip.root_uuid = i.uuid "
+                f"WHERE {where} ORDER BY tip.latest DESC",
+                params
+            ).fetchall()
+            result = []
+            for r in rows:
+                count = con.execute(
+                    "SELECT COUNT(*) FROM images WHERE root_uuid = ? AND uuid != ?", (r[0], r[0])
+                ).fetchone()[0]
+                tip = con.execute(
+                    "SELECT uuid, created_at, filename FROM images WHERE root_uuid = ? ORDER BY created_at DESC LIMIT 1",
+                    (r[0],)
+                ).fetchone()
+                tip_stem = tip[2].split("/")[-1].rsplit(".", 1)[0] if tip[2] else None
+                result.append({
+                    "uuid": r[0],
+                    "root_name": r[1],
+                    "filename": r[2],
+                    "abs_path": r[3],
+                    "created_at": r[4],
+                    "parent_uuid": r[5],
+                    "descendant_count": count,
+                    "latest_uuid": tip[0],
+                    "latest_created_at": tip[1],
+                    "latest_filename": tip_stem,
+                })
+            con.close()
+            return result
+
+        loop = asyncio.get_event_loop()
+        result = await loop.run_in_executor(None, _read)
         return web.json_response(result)
 
     @routes.get("/image-manager/api/all-images")
     async def get_all_images(request):
+        from collections import Counter
         date_filter = request.rel_url.query.get("date")
         name_filter = request.rel_url.query.get("root_name")
-        con = sqlite3.connect(db_path)
-        if date_filter:
-            params = []
-            where = "i.parent_uuid IS NULL AND date(tip.latest) = ?"
-            params.append(date_filter)
-            if name_filter:
-                where += " AND i.root_name = ?"
-                params.append(name_filter)
-            rows = con.execute(
-                f"SELECT i.uuid, i.root_name, i.filename, i.abs_path, i.created_at, i.parent_uuid, i.root_uuid "
-                f"FROM images i "
-                f"JOIN (SELECT root_uuid, MAX(created_at) as latest FROM images GROUP BY root_uuid) tip "
-                f"  ON tip.root_uuid = i.uuid "
-                f"WHERE {where}",
-                params,
-            ).fetchall()
-        elif name_filter:
-            rows = con.execute(
-                "SELECT uuid, root_name, filename, abs_path, created_at, parent_uuid, root_uuid "
-                "FROM images WHERE root_name = ? ORDER BY created_at DESC",
-                (name_filter,),
-            ).fetchall()
-        else:
-            rows = con.execute(
-                "SELECT uuid, root_name, filename, abs_path, created_at, parent_uuid, root_uuid FROM images"
-            ).fetchall()
-        all_rows = con.execute("SELECT uuid, parent_uuid, root_uuid FROM images").fetchall()
-        con.close()
-        parent_map = {r[0]: r[1] for r in all_rows}
+        orphan_filter = request.rel_url.query.get("orphan", "").lower() == "true"
 
-        from collections import Counter
+        def _read():
+            con = sqlite3.connect(db_path, timeout=10)
+            if date_filter:
+                params = []
+                where = "i.parent_uuid IS NULL AND date(tip.latest) = ?"
+                params.append(date_filter)
+                if name_filter:
+                    where += " AND i.root_name = ?"
+                    params.append(name_filter)
+                rows = con.execute(
+                    f"SELECT i.uuid, i.root_name, i.filename, i.abs_path, i.created_at, i.parent_uuid, i.root_uuid "
+                    f"FROM images i "
+                    f"JOIN (SELECT root_uuid, MAX(created_at) as latest FROM images GROUP BY root_uuid) tip "
+                    f"  ON tip.root_uuid = i.uuid "
+                    f"WHERE {where}",
+                    params,
+                ).fetchall()
+            elif name_filter:
+                rows = con.execute(
+                    "SELECT uuid, root_name, filename, abs_path, created_at, parent_uuid, root_uuid "
+                    "FROM images WHERE root_name = ? ORDER BY created_at DESC",
+                    (name_filter,),
+                ).fetchall()
+            else:
+                rows = con.execute(
+                    "SELECT uuid, root_name, filename, abs_path, created_at, parent_uuid, root_uuid FROM images"
+                ).fetchall()
+            all_rows = con.execute("SELECT uuid, parent_uuid, root_uuid FROM images").fetchall()
+            con.close()
+            return rows, all_rows
+
+        loop = asyncio.get_event_loop()
+        rows, all_rows = await loop.run_in_executor(None, _read)
+
+        parent_map = {r[0]: r[1] for r in all_rows}
         global_root_counts = Counter(r[2] for r in all_rows)
 
         def compute_generation(uuid):
@@ -114,17 +128,20 @@ def make_app(managed_root: Path, db_path: Path) -> web.Application:
                 cur = parent_map.get(cur)
             return depth
 
-        return web.json_response([
+        result = [
             {"uuid": r[0], "root_name": r[1], "filename": r[2],
              "abs_path": r[3], "created_at": r[4], "parent_uuid": r[5], "root_uuid": r[6],
              "generation": compute_generation(r[0]),
              "orphan": global_root_counts[r[6]] == 1}
             for r in rows
-        ])
+        ]
+        if orphan_filter:
+            result = [item for item in result if item["orphan"]]
+        return web.json_response(result)
 
     @routes.get("/image-manager/api/folders")
     async def get_folders(request):
-        con = sqlite3.connect(db_path)
+        con = sqlite3.connect(db_path, timeout=10)
         rows = con.execute(
             "SELECT root_name, COUNT(*) as cnt, MAX(created_at) as latest_tip_at "
             "FROM images GROUP BY root_name ORDER BY latest_tip_at DESC"
@@ -139,7 +156,7 @@ def make_app(managed_root: Path, db_path: Path) -> web.Application:
     async def get_leaf_strips(request):
         date_filter = request.rel_url.query.get("date")
         name_filter = request.rel_url.query.get("root_name")
-        con = sqlite3.connect(db_path)
+        con = sqlite3.connect(db_path, timeout=10)
         rows = con.execute(
             "SELECT uuid, root_uuid, root_name, filename, parent_uuid, created_at FROM images"
         ).fetchall()
@@ -179,7 +196,7 @@ def make_app(managed_root: Path, db_path: Path) -> web.Application:
     @routes.get("/image-manager/api/tree/{root_uuid}")
     async def get_tree(request):
         root_uuid = request.match_info["root_uuid"]
-        con = sqlite3.connect(db_path)
+        con = sqlite3.connect(db_path, timeout=10)
 
         def build_node(img_uuid, generation=0, cross_chain=False):
             row = con.execute(
@@ -225,7 +242,7 @@ def make_app(managed_root: Path, db_path: Path) -> web.Application:
     @routes.get("/image-manager/api/workflow/{uuid}")
     async def get_workflow(request):
         img_uuid = request.match_info["uuid"]
-        con = sqlite3.connect(db_path)
+        con = sqlite3.connect(db_path, timeout=10)
         row = con.execute(
             "SELECT abs_path, filename FROM images WHERE uuid = ?", (img_uuid,)
         ).fetchone()
@@ -241,21 +258,7 @@ def make_app(managed_root: Path, db_path: Path) -> web.Application:
 
         import json as _json
         workflow = _json.loads(raw_workflow)
-
-        # Replace any LoadImage node with ManagedLoadImage pointing to this image
-        for node_id, node in list(workflow.items()):
-            if node.get("class_type") == "LoadImage":
-                node["class_type"] = "ManagedLoadImage"
-                node["inputs"]["image"] = row[1]  # relative filename
-                break
-        else:
-            # No LoadImage found — inject a new ManagedLoadImage node
-            new_id = str(max((int(k) for k in workflow if k.isdigit()), default=0) + 1)
-            workflow[new_id] = {
-                "class_type": "ManagedLoadImage",
-                "inputs": {"image": row[1]},
-            }
-
+        workflow = _inject_parent_into_workflow(workflow, row[1])
         return web.json_response(workflow)
 
     @routes.post("/image-manager/api/import")
@@ -280,6 +283,25 @@ def make_app(managed_root: Path, db_path: Path) -> web.Application:
         result = import_image(pil_img, filename, managed_root, db_path)
         return web.json_response(result)
 
+    @routes.post("/image-manager/api/unlink-parent")
+    async def unlink_parent_route(request):
+        try:
+            from .lineage import unlink_parent
+        except ImportError:
+            from lineage import unlink_parent
+        body = await request.json()
+        child_uuid = body.get("child_uuid")
+        if not child_uuid:
+            raise web.HTTPBadRequest(reason="child_uuid required")
+        try:
+            loop = asyncio.get_event_loop()
+            result = await loop.run_in_executor(
+                None, unlink_parent, child_uuid, db_path, managed_root
+            )
+        except ValueError as e:
+            raise web.HTTPBadRequest(reason=str(e))
+        return web.json_response(result)
+
     @routes.post("/image-manager/api/set-parent")
     async def set_parent_route(request):
         try:
@@ -293,7 +315,7 @@ def make_app(managed_root: Path, db_path: Path) -> web.Application:
             raise web.HTTPBadRequest(reason="child_uuid and parent_uuid required")
         # Detect direct-child-swap case before general cycle check
         import sqlite3 as _sqlite3
-        con = _sqlite3.connect(db_path)
+        con = _sqlite3.connect(db_path, timeout=10)
         proposed_parent_row = con.execute(
             "SELECT parent_uuid, filename FROM images WHERE uuid = ?", (parent_uuid,)
         ).fetchone()
@@ -312,7 +334,7 @@ def make_app(managed_root: Path, db_path: Path) -> web.Application:
             )
         if body.get("enforce_chronological", False):
             import sqlite3 as _sqlite3
-            con = _sqlite3.connect(db_path)
+            con = _sqlite3.connect(db_path, timeout=10)
             row = con.execute(
                 "SELECT uuid, created_at FROM images WHERE uuid IN (?, ?)",
                 (child_uuid, parent_uuid),
@@ -322,7 +344,10 @@ def make_app(managed_root: Path, db_path: Path) -> web.Application:
             if by_uuid.get(parent_uuid, "") > by_uuid.get(child_uuid, ""):
                 raise web.HTTPUnprocessableEntity(reason="Parent must be older than child")
         try:
-            result = set_parent(child_uuid, parent_uuid, db_path, managed_root)
+            loop = asyncio.get_event_loop()
+            result = await loop.run_in_executor(
+                None, set_parent, child_uuid, parent_uuid, db_path, managed_root
+            )
         except ValueError as e:
             raise web.HTTPBadRequest(reason=str(e))
         return web.json_response(result)
@@ -337,11 +362,14 @@ def make_app(managed_root: Path, db_path: Path) -> web.Application:
         pairs = body.get("pairs", [])
         results = []
         errors = []
+        loop = asyncio.get_event_loop()
         for pair in pairs:
             child_uuid = pair.get("child_uuid")
             parent_uuid = pair.get("parent_uuid")
             try:
-                result = set_parent(child_uuid, parent_uuid, db_path, managed_root)
+                result = await loop.run_in_executor(
+                    None, set_parent, child_uuid, parent_uuid, db_path, managed_root
+                )
                 results.append(result)
             except Exception as e:
                 errors.append({"child_uuid": child_uuid, "parent_uuid": parent_uuid, "error": str(e)})
@@ -465,7 +493,7 @@ def make_app(managed_root: Path, db_path: Path) -> web.Application:
         date_filter = request.rel_url.query.get("date")
         name_filter = request.rel_url.query.get("root_name")
         k_scale = max(0.1, min(10.0, float(request.rel_url.query.get("k_scale", "1.0"))))
-        con = sqlite3.connect(db_path)
+        con = sqlite3.connect(db_path, timeout=10)
         if date_filter or name_filter:
             where_clauses = []
             params = []
@@ -528,7 +556,7 @@ def make_app(managed_root: Path, db_path: Path) -> web.Application:
             new_embeddings = _clustering.embed_images(new_paths, backend=backend)
             await emit({"status": "progress", "current": len(need_embed), "total": len(need_embed)})
 
-            con = sqlite3.connect(db_path)
+            con = sqlite3.connect(db_path, timeout=10)
             for img_uuid, emb in zip(new_uuids, new_embeddings):
                 con.execute(
                     "UPDATE images SET embedding = ?, embedding_backend = ? WHERE uuid = ?",
@@ -564,9 +592,12 @@ def make_app(managed_root: Path, db_path: Path) -> web.Application:
             }
             clusters.setdefault(str(label), []).append(record)
 
-        # Sort each cluster: orphans last, then by chain (root_uuid), generation, date
+        # Sort each cluster: chain images first (grouped by root, then generation, then date);
+        # orphans last, sorted purely by created_at (root_uuid is a random UUID, not temporal).
         def sort_key(item):
-            return (item["orphan"], item["root_uuid"], item["generation"], item["created_at"])
+            if item["orphan"]:
+                return (True, "", 0, item["created_at"])
+            return (False, item["root_uuid"], item["generation"], item["created_at"])
 
         clusters = {k: sorted(v, key=sort_key) for k, v in clusters.items()}
 
@@ -576,31 +607,37 @@ def make_app(managed_root: Path, db_path: Path) -> web.Application:
     @routes.get("/image-manager/api/metadata/{uuid}")
     async def get_metadata(request):
         img_uuid = request.match_info["uuid"]
-        con = sqlite3.connect(db_path)
-        row = con.execute(
-            "SELECT uuid, root_name, root_uuid, parent_uuid, filename, abs_path, created_at "
-            "FROM images WHERE uuid = ?",
-            (img_uuid,),
-        ).fetchone()
-        if not row:
+
+        def _read():
+            con = sqlite3.connect(db_path, timeout=10)
+            row = con.execute(
+                "SELECT uuid, root_name, root_uuid, parent_uuid, filename, abs_path, created_at "
+                "FROM images WHERE uuid = ?",
+                (img_uuid,),
+            ).fetchone()
+            if not row:
+                con.close()
+                return None
+            _uuid, root_name, root_uuid, parent_uuid, filename, abs_path, created_at = row
+            generation = 0
+            current = parent_uuid
+            while current:
+                parent_row = con.execute(
+                    "SELECT parent_uuid FROM images WHERE uuid = ?", (current,)
+                ).fetchone()
+                if not parent_row:
+                    break
+                generation += 1
+                current = parent_row[0]
             con.close()
+            return (_uuid, root_name, root_uuid, parent_uuid, filename, abs_path, created_at, generation)
+
+        loop = asyncio.get_event_loop()
+        db_result = await loop.run_in_executor(None, _read)
+        if db_result is None:
             raise web.HTTPNotFound()
 
-        uuid, root_name, root_uuid, parent_uuid, filename, abs_path, created_at = row
-
-        # Walk parent chain to compute generation depth
-        generation = 0
-        current = parent_uuid
-        while current:
-            parent_row = con.execute(
-                "SELECT parent_uuid FROM images WHERE uuid = ?", (current,)
-            ).fetchone()
-            if not parent_row:
-                break
-            generation += 1
-            current = parent_row[0]
-        con.close()
-
+        _uuid, root_name, root_uuid, parent_uuid, filename, abs_path, created_at, generation = db_result
         file_path = Path(abs_path)
         file_size = file_path.stat().st_size if file_path.exists() else 0
 
@@ -633,7 +670,7 @@ def make_app(managed_root: Path, db_path: Path) -> web.Application:
                 pass
 
         result = {
-            "uuid": uuid,
+            "uuid": _uuid,
             "root_name": root_name,
             "root_uuid": root_uuid,
             "parent_uuid": parent_uuid,
@@ -686,6 +723,39 @@ def make_app(managed_root: Path, db_path: Path) -> web.Application:
             raise web.HTTPBadRequest(reason=msg)
         return web.json_response(result)
 
+    @routes.post("/image-manager/api/send-to-comfy/{uuid}")
+    async def send_to_comfy(request):
+        img_uuid = request.match_info["uuid"]
+        con = sqlite3.connect(db_path, timeout=10)
+        row = con.execute(
+            "SELECT abs_path, filename FROM images WHERE uuid = ?", (img_uuid,)
+        ).fetchone()
+        con.close()
+        if not row or not Path(row[0]).exists():
+            raise web.HTTPNotFound()
+
+        from PIL import Image as PilImage
+        pil = PilImage.open(row[0])
+        raw_workflow = pil.text.get("workflow") if hasattr(pil, "text") else None
+        if not raw_workflow:
+            raise web.HTTPNotFound(reason="No workflow metadata in PNG")
+
+        import json as _json
+        workflow = _json.loads(raw_workflow)
+        workflow = _inject_parent_into_workflow(workflow, row[1])
+
+        _send = ws_send
+        if _send is None:
+            try:
+                from server import PromptServer
+                _send = PromptServer.instance.send_sync
+            except Exception:
+                pass
+        if _send is not None:
+            _send("im_load_workflow", {"workflow": workflow})
+
+        return web.json_response({"ok": True})
+
     @routes.post("/image-manager/api/rebuild")
     async def rebuild_index(request):
         try:
@@ -697,7 +767,7 @@ def make_app(managed_root: Path, db_path: Path) -> web.Application:
 
     @routes.get("/image-manager/api/order-violations")
     async def get_order_violations(request):
-        con = sqlite3.connect(db_path)
+        con = sqlite3.connect(db_path, timeout=10)
         rows = con.execute(
             """
             SELECT p.uuid, p.filename, p.created_at,
@@ -759,15 +829,85 @@ def make_app(managed_root: Path, db_path: Path) -> web.Application:
     @routes.get("/image-manager/api/image/{uuid}")
     async def get_image(request):
         img_uuid = request.match_info["uuid"]
-        con = sqlite3.connect(db_path)
+        con = sqlite3.connect(db_path, timeout=10)
         row = con.execute("SELECT abs_path FROM images WHERE uuid = ?", (img_uuid,)).fetchone()
         con.close()
         if not row or not Path(row[0]).exists():
             raise web.HTTPNotFound()
         return web.FileResponse(row[0])
 
+    @routes.get("/image-manager/api/search")
+    async def search_images(request):
+        q = request.rel_url.query.get("q", "").strip()
+        root_name = request.rel_url.query.get("root_name")
+        if not q:
+            return web.json_response([])
+        pattern = f"%{q}%"
+        where = "(i.root_name LIKE ? OR i.filename LIKE ? OR i.positive_prompt LIKE ? OR i.loras LIKE ?)"
+        params = [pattern, pattern, pattern, pattern]
+        if root_name:
+            where += " AND i.root_name = ?"
+            params.append(root_name)
+
+        def _read():
+            con = sqlite3.connect(db_path, timeout=10)
+            rows = con.execute(
+                f"SELECT i.uuid, i.root_uuid, i.root_name, i.filename, i.parent_uuid, i.created_at "
+                f"FROM images i "
+                f"WHERE {where} ORDER BY i.created_at DESC",
+                params,
+            ).fetchall()
+            con.close()
+            return rows
+
+        loop = asyncio.get_event_loop()
+        rows = await loop.run_in_executor(None, _read)
+        return web.json_response([
+            {
+                "uuid": r[0],
+                "root_uuid": r[1],
+                "root_name": r[2],
+                "filename": r[3],
+                "parent_uuid": r[4],
+                "created_at": r[5],
+            }
+            for r in rows
+        ])
+
     app.add_routes(routes)
     return app
+
+
+def _inject_parent_into_workflow(workflow: dict, filename: str) -> dict:
+    nodes = workflow.get("nodes", [])
+    save_nodes = [n for n in nodes if n.get("type") == "SaveImage"]
+    if not save_nodes:
+        save_nodes = [n for n in nodes if n.get("type") == "ManagedSaveImage"]
+    if not save_nodes:
+        return workflow
+
+    for node in save_nodes:
+        if node.get("type") == "SaveImage":
+            node["type"] = "ManagedSaveImage"
+            node.setdefault("properties", {})["Node name for S&R"] = "ManagedSaveImage"
+
+    new_id = max(n["id"] for n in nodes) + 1
+    first_save_pos = save_nodes[0].get("pos", [220, 0])
+    load_node = {
+        "id": new_id,
+        "type": "ManagedLoadImage",
+        "widgets_values": [filename, "image"],
+        "pos": [first_save_pos[0] - 220, first_save_pos[1]],
+    }
+    nodes.append(load_node)
+
+    links = workflow.setdefault("links", [])
+    next_link_id = (max(link[0] for link in links) + 1) if links else 1
+    for save_node in save_nodes:
+        links.append([next_link_id, new_id, 2, save_node["id"], 1, "STRING"])
+        next_link_id += 1
+
+    return workflow
 
 
 def mount_routes(server_app, managed_root: Path, db_path: Path):
